@@ -1,0 +1,46 @@
+\documentclass[11pt]{article}
+\usepackage{mathtools}
+\usepackage{mdframed}
+\usepackage{fullpage}
+\usepackage{amsfonts}
+\usepackage{tikz}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+
+
+%edit this for each class
+\newcommand\name{John Collin Vincent}
+\newcommand\classname{COM S 540}
+\newcommand\assignment{Part 0}
+
+
+\newcounter{excounter}
+\setcounter{excounter}{1}
+\newcommand\ques[2]{\vskip 1em  \noindent\textbf{\arabic{excounter}\addtocounter{excounter}{1}.} \emph{#1} \noindent#2}
+\newenvironment{question}{\ques{}\begin{quote}}{\end{quote}}
+\newenvironment{subquestion}[1]{#1) \begin{quote}}{\end{quote}}
+
+\pagestyle{fancy}
+\rfoot{\name, page \thepage/\pageref{LastPage}}
+\cfoot{}
+\rhead{}
+\lhead{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+\DeclarePairedDelimiter\ceil{\lceil}{\rceil}
+\DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
+
+
+\begin{document}
+
+
+  {\bf \classname \hspace{1cm} \assignment\hfill \name}
+  \vskip 2em
+  \noindent 
+  SSH url\\
+  \hspace*{1cm} git@github.com:John-Vincent/coms540.git\\
+  HTTPS url\\
+  \hspace*{1cm} https://github.com/John-Vincent/coms540.git
+
+
+\end{document}
