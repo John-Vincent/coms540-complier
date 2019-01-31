@@ -1,22 +1,34 @@
 #---- VARIABLES
+
+#directories
 BIN = ./bin
 DBIN = ./docs
 SRC = ./src
 DSRC = ./src/docs
-OBJ = ./headers
-CC = gcc
-CFLAGS = -Werror -Wall -ggdb
-TEXC = pdflatex
-TEXFLAGS = -interaction=nonstopmode -output-directory $(DBIN)
+OBJ = ./includes
+LIBDIRS = core,lexer
 
-C_BINARIES = $(addprefix $(BIN)/, $(addsuffix .o, temp ))
+#commands
+CC = gcc
+TEXC = pdflatex
+LEX = flex
+
+#options
+TEXFLAGS = -interaction=nonstopmode -output-directory $(DBIN)
+CFLAGS = -Werror -Wall -ggdb
+CLIBS = -lfl
+
+#targets
+C_CORE = $(addprefix core/, main)
+LEXER =  $(addprefix lexer/, c_lang.yy)
+C_BINARIES = $(addprefix $(BIN)/, $(addsuffix .o, $(C_CORE) $(LEXER) ))
 DOC_FILES = $(addprefix $(DBIN)/, $(addsuffix .pdf, developers))
 
 #---- PHONY RULES
-default: compiler documentation
+default: compile doc
 
-compiler: $(BIN)/compiler
-	@echo "making compiler"
+compile: $(BIN)/compile
+	@echo "making compile"
 
 docs: $(DOC_FILES)
 	@echo "made documentation files"
@@ -24,30 +36,46 @@ docs: $(DOC_FILES)
 spell: .tex
 	@aspell -t -c .tex
 
-makebin:
-	@[  -d $(BIN) ] || echo "making bin folder"
-	@[  -d $(BIN) ] || mkdir $(BIN)
-	@[ -d $(DBIN) ] || echo "making docs folder"
-	@[ -d $(DBIN) ] || mkdir $(DBIN)
-
 clean:
 	@if [ -d $(BIN) ]; then rm -r $(BIN); fi
 	@if [ -d $(DBIN) ]; then rm -r $(DBIN); fi
 	@echo "project directory is now clean"
 
-.PHONY: default compiler docs makebin clean spell 
+.PHONY: default compile docs clean spell 
 
 #---- COMPILATION RULES
-$(DBIN)/%.pdf: $(DSRC)/%.tex | makebin
+
+.PRECIOUS: $(BIN)%/. $(BIN)/. $(DBIN)/. $(BIN)/%.yy.c
+
+#rules for making an bin directories needed
+$(BIN)/.:
+	@mkdir -p $@
+
+$(BIN)%/.:
+	@mkdir -p $@
+
+$(DBIN)/.:
+	@mkdir -p $@
+
+#allow for creating bin directories on the fly
+.SECONDEXPANSION:
+
+$(DBIN)/%.pdf: $(DSRC)/%.tex | $$(@D)/.
 	@$(TEXC) $(TEXFLAGS) $< >> $(BIN)/latexgarbage.txt
 	@rm $(DBIN)/*.log $(BIN)/latexgarbage.txt
 
-$(BIN)/compiler: $(C_BINARIES) | makebin
-	@$(CC) -o $@ $(CFLAGS) $(C_BINARIES)
+$(BIN)/compile: $(C_BINARIES) | $$(@D)/.
+	@$(CC) $(CFLAGS) $(C_BINARIES) $(CLIBS) -o $@
 
-
-$(BIN)/%.o: $(SRC)/%.c $(OBJ)/%.h
-	@$(ECHO) compiling $<
+#standard c object rule
+$(BIN)/%.o: $(SRC)/%.c | $$(@D)/. 
+	@echo "compiling $<"
 	@$(CC) $(CFLAGS) -c $< -o $@
 
+#c object from generated c file
+$(BIN)/%.o: $(BIN)/%.c | $$(@D)/.
+	@echo "compiling $<"
+	@$(CC) $(CFLAGS) -Wno-unused-function -c $<  -o $@
 
+$(BIN)/%.yy.c: $(SRC)/%.l | $$(@D)/.
+	@$(LEX) -o $@ $<
