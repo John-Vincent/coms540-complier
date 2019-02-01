@@ -20,12 +20,12 @@ CLIBS = -lfl
 
 #targets
 C_CORE = $(addprefix core/, main)
-LEXER =  $(addprefix lexer/, c_lang.yy)
+LEXER =  $(addprefix lexer/, c_lang.yy lexer)
 C_BINARIES = $(addprefix $(BIN)/, $(addsuffix .o, $(C_CORE) $(LEXER) ))
 DOC_FILES = $(addprefix $(DBIN)/, $(addsuffix .pdf, developers))
 
 #---- PHONY RULES
-default: compile doc
+default: compile docs
 
 compile: $(BIN)/compile
 	@echo "making compile"

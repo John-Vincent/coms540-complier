@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "../../includes/types.h"
-#include "../../include/state.h"
+#include "../../include/main.h"
+#include "../../includes/lexer.h"
 
 //characters needed ofr on the parse args function
 #define LEXER           'l'
@@ -49,7 +50,7 @@ int main(int argc, char** argv)
     token = yylex();
     while(token)
     {   
-        printf("line: %d, token: %d, string: %s\n", yyline, token, yytext);
+        printf("File TODO Line %d Token %s Text '%s'\n", yyline, yytoken_name, yytext);
         token = yylex();
     }
     free(files);
