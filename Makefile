@@ -28,7 +28,7 @@ DOC_FILES = $(addprefix $(DBIN)/, $(addsuffix .pdf, developers))
 default: compile docs
 
 compile: $(BIN)/compile
-	@echo "making compile"
+	@echo "made compile"
 
 docs: $(DOC_FILES)
 	@echo "made documentation files"
@@ -65,6 +65,7 @@ $(DBIN)/%.pdf: $(DSRC)/%.tex | $$(@D)/.
 	@rm $(DBIN)/*.log $(BIN)/latexgarbage.txt
 
 $(BIN)/compile: $(C_BINARIES) | $$(@D)/.
+	@echo "linking objects"
 	@$(CC) $(CFLAGS) $(C_BINARIES) $(CLIBS) -o $@
 
 #standard c object rule

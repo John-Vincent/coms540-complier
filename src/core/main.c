@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "../../includes/types.h"
-#include "../../include/main.h"
+#include "../../includes/main.h"
 #include "../../includes/lexer.h"
 
 //characters needed ofr on the parse args function
@@ -12,55 +13,81 @@
 #define COMPILE         'c'
 #define OPTION_FLAG     '-'
 
-extern char* yytext;
-extern int yyline;
+static int parse_args(int argc, char** argv);
 
 //source files that need to be 'compiled'
-char** file_list;
+static char** file_list;
 //number of files in list
-int files = 0;
+static int files = 0;
 
 //bit field for current program options
-int program_options = INVALID_STATE;
-//error message that should be printed on exit.
-char error_message[100]
+uint64_t program_options = INITIAL_OPTION;
 
 /*
  * main entry point for program
  */ 
 int main(int argc, char** argv)
 {
-    /* initialize the file path array
-     * this will hold the argument strings that 
-     * are determained to be source files to parse.
-     * we will initialize it to be as long as the number
-     * of arguments so it is at least big enough to
-     * hold all files.
-     */
-    files = malloc(sizeof(argc) * (argc-1));
-    if(files == NULL) 
+    lexeme_t *token_list;
+
+    //temp to meet assigment 1 specs
+    program_options = program_options | LEXER_DEBUG_OPTION;
+
+    file_list = (char**)malloc(sizeof(argc) * (argc-1));
+
+    if(file_list == NULL) 
     {
-        fprintf(stderr, "CRITICAL FAILURE: unable to allocate memory");
+        fprintf(stderr, "CRITICAL FAILURE: unable to allocate memory\n");
         return -1;
     }
 
     //call to interperate the command line arguments 
-    parse_args(argc, argv);
-    int token;
-    token = yylex();
-    while(token)
-    {   
-        printf("File TODO Line %d Token %s Text '%s'\n", yyline, yytoken_name, yytext);
-        token = yylex();
+    if(parse_args(argc, argv))
+        return -1;
+    //run lexer on the files if lexer option is set 
+    if(program_options & LEXER_OPTION)
+    {
+        token_list = lexical_analysis(files, file_list);
+        fprintf(stderr, "failed to parse input\n");
+        if(!token_list)
+            return -2;
     }
-    free(files);
+    //clean up after file list
+    free(file_list);
+
+    //run parser
+    if(program_options & PARSER_OPTION)
+    {
+        fprintf(stderr, "failed to parse input\n");
+        return -3;
+    }
+    //run type analysis
+    if(program_options & TYPE_OPTION && 0)
+    {
+        fprintf(stderr, "failed to analyze types\n");
+        return -4;
+    }
+    //create intermediate code
+    if(program_options & INTERMEDIATE_OPTION && 0)
+    {
+        fprintf(stderr, "failed to generate intermediate code\n");
+        return -6;
+    }
+    //compile to target code
+    if(program_options & COMPILE_OPTION)
+    {
+        fprintf(stderr, "failed to compile input\n");
+        return -7;
+    }
+
+    clean_lexer();
+
     return 0;
 }
 
-void parse_args(int argc, char** argv)
+static int parse_args(int argc, char** argv)
 {
-    int i, j;
-    size_t len;
+    int i, main_option_set = 0;
     char cur;
 
     for(i = 1; i < argc; i++)
@@ -69,36 +96,86 @@ void parse_args(int argc, char** argv)
         if(*argv[i] == OPTION_FLAG)
         {   
             //set the current character
-            //we know its safe to check 2 because one was '-' 
+            //we know its safe to check 1 because 0was '-' 
             //and it must be null terminated
-            cur = argv[i][2];
+            cur = argv[i][1];
             switch(cur)
             {
-                case LEXER:
-                    state = state | LEXER_STATE;
-                    break;
-                case PARSER:
-                    state = state | PARSER_STATE;
-                    break;
-                case TYPE:
-                    state = state | TYPE_STATE;
-                    break;
-                case INTERMEDIATE:
-                    state = state | INTERMEDIATE_STATE;
-                    break;
                 case COMPILE:
-                    state = state | COMPILE_STATE;
+                    program_options = program_options | COMPILE_OPTION;
+                case INTERMEDIATE:
+                    program_options = program_options | INTERMEDIATE_OPTION;
+                case TYPE:
+                    program_options = program_options | TYPE_OPTION;
+                case PARSER:
+                    program_options = program_options | PARSER_OPTION;
+                case LEXER:
+                    program_options = program_options | LEXER_OPTION;
+                    if(main_option_set)
+                    {
+                        fprintf(
+                            stderr, 
+                            "only one of %c %c %c %c %c can be selected\n", 
+                            LEXER, 
+                            PARSER, 
+                            TYPE, 
+                            INTERMEDIATE, 
+                            COMPILE
+                        );
+                        return -1;
+                    }
+                    main_option_set = 1;
                     break;
                 case OPTION_FLAG:
+                    if(!strcmp(argv[i], "--debug-lexer"))
+                    {
+                        program_options = program_options | LEXER_DEBUG_OPTION;
+                        break;
+                    }
                 default:
-                    state = ERROR_STATE;
+                    fprintf(stderr, "unrecognized option: %s, %c\n", argv[i], cur);
+                    return -1;
                     break;
             }
         }
         else
         {
+            if(!main_option_set)
+            {
+                fprintf(
+                    stderr, 
+                    "must select a run option first: %c, %c, %c, %c, %c\n",
+                    LEXER, 
+                    PARSER, 
+                    TYPE, 
+                    INTERMEDIATE, 
+                    COMPILE
+                );
+                return -1;
+            }
             file_list[files] = argv[i]; 
             files++;
         }
     }
+
+    if(!main_option_set)
+    {
+        fprintf(
+            stderr, 
+            "must select a run option first: %c, %c, %c, %c, %c\n",
+            LEXER, 
+            PARSER, 
+            TYPE, 
+            INTERMEDIATE, 
+            COMPILE
+        );
+        return -1;
+    }
+
+    if(!files)
+    {
+        fprintf(stderr, "no input files program terminating\n");
+        return -1;
+    }
+    return 0;
 }

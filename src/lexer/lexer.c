@@ -1,6 +1,134 @@
-#include "../../includes/types.h"
-#include "../../includes/lexer.h"
 #include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <errno.h>
+#include <libgen.h>
+#include "../../includes/types.h"
+#include "../../includes/main.h"
+#include "../../includes/lexer.h"
+
+#define SIZE_OF_FILE_ARRAY 100
+
+static char *add_file(const char* file);
+
+static char **file_strings;
+static int number_of_files = 0;
+static lexeme_t *first;
+
+lexeme_t *lexical_analysis(int num_files, char** files)
+{
+    lexeme_t *curtok, *lasttok;
+    FILE* file;
+    char *file_copy;
+    int i;
+    
+    //first token
+    curtok = first = (lexeme_t*)malloc(sizeof(lexeme_t));
+    if(!curtok)
+    {
+        fprintf(stderr, "fatal error: could not allocate memory\n");
+        return NULL;
+    }
+
+    for(i = 0; i < num_files; i++)
+    {
+        file_copy = add_file(files[i]);
+        file = fopen(files[i], "r");
+        
+        if(!file)
+        {
+            fprintf(stderr, "Error opening file %s:\n %s\n", files[i], strerror(errno));
+            continue;
+        }
+        
+        yyrestart(file);
+
+        curtok->token = yylex();
+
+        while(curtok->token)
+        {  
+            curtok->line_number = yyline;
+            curtok->filename = file_copy;
+            if(program_options & LEXER_DEBUG_OPTION ) 
+            {
+                printf("File %s Line %d Token %s Text '%s'\n", 
+                    curtok->filename, curtok->line_number, yytoken_name, yytext
+                );
+            }
+            curtok->next = lasttok;
+            lasttok = curtok;
+            curtok = (lexeme_t*)malloc(sizeof(lexeme_t));
+            if(!curtok)
+            {
+                fprintf(stderr, "fatal error: could not allocate memory\n");
+                fclose(file);
+                return NULL;
+            }
+            if(lasttok)
+                lasttok->prev = curtok;
+            curtok->token = yylex();
+        }
+        fclose(file);
+    }
+    
+    lasttok->prev = NULL;
+    free(curtok);
+    return lasttok;
+}
+
+static char *add_file(const char* file)
+{
+    char **temp;
+    char *dup;
+
+    if(number_of_files % SIZE_OF_FILE_ARRAY == 0)
+    {
+        temp = realloc( file_strings, sizeof(char*) * (number_of_files + SIZE_OF_FILE_ARRAY));
+        if(temp == NULL)
+        {
+            fprintf(stderr, "failed to allocate memory.\n");
+            return NULL;
+        }
+        file_strings = temp;
+    }
+
+    dup = (char*) malloc(sizeof(char*) * strlen(file));
+
+    if(dup == NULL)
+    {
+        fprintf(stderr, "failed to allocate memory.\n");
+        return NULL;
+    }
+    
+    strcpy(dup, file);
+
+    file_strings[number_of_files] = dup;
+    number_of_files++;
+    return dup;
+}
+
+void clean_lexer()
+{
+    int i;
+    lexeme_t *cur, *next;
+
+    for(i = 0; i < number_of_files; i++)
+    {
+        free(file_strings[i]);
+    }
+
+    free(file_strings);
+    
+    cur = first;
+    next = cur->prev;
+    while(next)
+    {
+        free(cur);
+        cur = next;
+        next = cur->prev;
+    }
+    free(cur);
+}
 
 void tok_to_str(char* buff, int token)
 {
