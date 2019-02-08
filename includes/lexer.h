@@ -2,7 +2,7 @@
 #define LEXER_H
 
 #include <stdint.h>
-#define FILE_STACK_SIZE         1024
+#include "../../includes/hashmap.h"
 
 //size copied from the c lex file
 #ifndef YY_BUF_SIZE
@@ -37,7 +37,9 @@ typedef struct lexeme
 typedef struct lexer_state
 {
     char **file_strings;
-    char *file_stack[FILE_STACK_SIZE];
+    char **file_stack;
+    int stack_size;
+    map_t def_map;
     int number_of_files;
     lexeme_t *cur;
     lexeme_t *first;

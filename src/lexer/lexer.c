@@ -8,6 +8,8 @@
 #include "../../includes/lexer.h"
 
 #define SIZE_OF_FILE_ARRAY      100
+#define FILE_STACK_SIZE         32
+#define INCLUDE_CYCLE           -2
 
 static char *add_file(const char* file, lexer_state_t *state);
 
@@ -44,10 +46,18 @@ lexer_state_t *lexical_analysis(int num_files, char** files)
         yyline = 1;
         
         yyrestart(file);
+        state[i].file_stack = (char**) calloc(FILE_STACK_SIZE, sizeof(char*));
+        state[i].stack_size = FILE_STACK_SIZE;
         state[i].number_of_files = 0;
+        state[i].def_map = hashmap_new();
+
         fill_state(state + i, files[i]);
         
         fclose(file);
+        free(state[i].file_stack);
+        state[i].stack_size = 0;
+        state[i].stack_index = 0;
+        state[i].cur = state[i].first;
     }
     
     return state;
@@ -56,38 +66,44 @@ lexer_state_t *lexical_analysis(int num_files, char** files)
 static int fill_state(lexer_state_t *state, char *file)
 {
     lexeme_t *curtok;
-    char *file_copy;
-    int stack;
+    char *file_copy, **temp;
+    int i;
     
     file_copy = add_file(file, state);
 
     if(file_copy == NULL)
         return -1;
 
-    curtok = (lexeme_t*) calloc(1, sizeof(lexeme_t));
-    if(!curtok)
-    {
-        fprintf(stderr, "fatal error: could not allocate memory\n");
-        return -1;
-    }
-    //if this is a fresh state then set the first token point to this token
     
-    for(stack = 0; stack < FILE_STACK_SIZE; stack++)
+    if(state->file_stack[state->stack_size - 1] != NULL)
     {
-        if(state->file_stack[stack] == NULL);
+        temp = realloc(state->file_stack, FILE_STACK_SIZE + state->stack_size); 
+        if(!temp)
         {
-            state->file_stack[stack] = file_copy;
+            fprintf(stderr, "failed to allocate memory");
+            return -1;
+        }
+        state->file_stack = temp;
+        state->stack_size += FILE_STACK_SIZE; 
+    }
+
+    for(i = 0; i < state->stack_size; i++)
+    {
+        if(state->file_stack[i] == NULL)
+        {
+            state->file_stack[i] = file_copy;
             break;
         }
         if(!strcmp(file_copy, state->file_stack[i]))
         {
-            fprintf(stderr, "include cycle detected %s, %s", line, dup);
-            return -1;
+            return INCLUDE_CYCLE;
         }
     }
-    if(stack == FILE_STACK_SIZE)
+
+    curtok = (lexeme_t*) calloc(1, sizeof(lexeme_t));
+    if(!curtok)
     {
-        fprintf(stderr, "max include  depth reached");
+        fprintf(stderr, "fatal error: could not allocate memory\n");
         return -1;
     }
     curtok->token = yylex();
@@ -115,7 +131,7 @@ static int fill_state(lexer_state_t *state, char *file)
         }
         curtok->token = yylex();
     }
-    state->file_stack[stack] = NULL;
+    state->file_stack[i] = NULL;
     free(curtok);
     return 0;
 }
@@ -181,6 +197,7 @@ static int process_token(lexer_state_t *state, lexeme_t *token)
             else if(toke_num == NEWLINE_TOKEN)
             {
                 fprintf(stderr, "invalid import on line %s: no file provided", line);
+                return -1;
             }
             else if(token_num == STRCONST_TOKEN)
             {
@@ -209,7 +226,10 @@ static int process_token(lexer_state_t *state, lexeme_t *token)
             }
             lex_buff = yy_create_buffer(file, YY_BUF_SIZE);
             yypush_buffer_state(lex_buff);
-            fill_state(state, dup);
+            if(fill_state(state, dup) == INCLUDE_CYCLE)
+            {
+                fprintf(stderr, "include cycle detected %s, line %d", token->filename, token->line_number);
+            }
             yypop_buffer_state();
             yyline = line;
             fclose(file);

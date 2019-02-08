@@ -19,7 +19,7 @@ CFLAGS = -Werror -Wall -ggdb
 CLIBS = -lfl
 
 #targets
-C_CORE = $(addprefix core/, main)
+C_CORE = $(addprefix core/, main hashmap )
 LEXER =  $(addprefix lexer/, c_lang.yy lexer)
 C_BINARIES = $(addprefix $(BIN)/, $(addsuffix .o, $(C_CORE) $(LEXER) ))
 DOC_FILES = $(addprefix $(DBIN)/, $(addsuffix .pdf, developers))
