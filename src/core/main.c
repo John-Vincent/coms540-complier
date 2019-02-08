@@ -28,7 +28,7 @@ uint64_t program_options = INITIAL_OPTION;
  */ 
 int main(int argc, char** argv)
 {
-    lexeme_t *token_list;
+    lexer_state_t *lexer;
 
     //temp to meet assigment 1 specs
     program_options = program_options | LEXER_DEBUG_OPTION;
@@ -47,10 +47,12 @@ int main(int argc, char** argv)
     //run lexer on the files if lexer option is set 
     if(program_options & LEXER_OPTION)
     {
-        token_list = lexical_analysis(files, file_list);
-        fprintf(stderr, "failed to parse input\n");
-        if(!token_list)
+        lexer = lexical_analysis(files, file_list);
+        if(!lexer)
+        {
+            fprintf(stderr, "failed to parse input\n");
             return -2;
+        }
     }
     //clean up after file list
     free(file_list);
@@ -62,13 +64,13 @@ int main(int argc, char** argv)
         return -3;
     }
     //run type analysis
-    if(program_options & TYPE_OPTION && 0)
+    if(program_options & TYPE_OPTION)
     {
         fprintf(stderr, "failed to analyze types\n");
         return -4;
     }
     //create intermediate code
-    if(program_options & INTERMEDIATE_OPTION && 0)
+    if(program_options & INTERMEDIATE_OPTION)
     {
         fprintf(stderr, "failed to generate intermediate code\n");
         return -6;
@@ -80,7 +82,7 @@ int main(int argc, char** argv)
         return -7;
     }
 
-    clean_lexer();
+    clean_lexer(lexer);
 
     return 0;
 }

@@ -2,8 +2,7 @@
 #define LEXER_H
 
 #include <stdint.h>
-
-#define TOKEN_BUFF_SIZE 20
+#define FILE_STACK_SIZE         1024
 
 //size copied from the c lex file
 #ifndef YY_BUF_SIZE
@@ -19,19 +18,30 @@
 #endif
 
 extern FILE* yyin;
-extern int yyline;
 extern char* yytext;
-extern char yytoken_name[TOKEN_BUFF_SIZE];
+extern int yyline;
 
 typedef struct yy_buffer_state *YY_BUFFER_STATE;
+
 typedef struct lexeme 
 {
     char* filename;
     int line_number;
     uint8_t token;
+    //only set for some tokens
+    void *value;
     struct lexeme* next;
     struct lexeme* prev;
 } lexeme_t;
+
+typedef struct lexer_state
+{
+    char **file_strings;
+    char *file_stack[FILE_STACK_SIZE];
+    int number_of_files;
+    lexeme_t *cur;
+    lexeme_t *first;
+} lexer_state_t;
 
 //functions in lex c 
 YY_BUFFER_STATE yy_create_buffer ( FILE *file, int size  );
@@ -39,6 +49,8 @@ void yy_switch_to_buffer ( YY_BUFFER_STATE new_buffer  );
 void yy_delete_buffer ( YY_BUFFER_STATE b  );
 void yy_flush_buffer ( YY_BUFFER_STATE b  );
 void yyrestart ( FILE *input_file  );
+void yypush_buffer_state ( YY_BUFFER_STATE new_buffer  );
+void yypop_buffer_state ( void );
 
 /**
  * function defined by lex
@@ -49,7 +61,7 @@ int yylex(void);
  * lexigraphical analysis of files
  * passed in through files array
  */
-lexeme_t *lexical_analysis(int num, char** files);
+lexer_state_t *lexical_analysis(int num, char** files);
 
 /**
  *  function that takes a token
@@ -67,6 +79,6 @@ void tok_to_str(char* buff, int token);
  *  and all filename strings store within
  *  those structs
  */
-void clean_lexer();
+void clean_lexer(lexer_state_t *state);
 
 #endif

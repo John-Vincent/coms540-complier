@@ -7,89 +7,255 @@
 #include "../../includes/main.h"
 #include "../../includes/lexer.h"
 
-#define SIZE_OF_FILE_ARRAY 100
+#define SIZE_OF_FILE_ARRAY      100
 
-static char *add_file(const char* file);
+static char *add_file(const char* file, lexer_state_t *state);
 
-static char **file_strings;
-static int number_of_files = 0;
-static lexeme_t *first;
+static int process_token(lexer_state_t *state, lexeme_t *token);
 
-lexeme_t *lexical_analysis(int num_files, char** files)
+static int fill_state(lexer_state_t *state, char *file);
+
+lexer_state_t *lexical_analysis(int num_files, char** files)
 {
-    lexeme_t *curtok, *lasttok;
+    lexer_state_t *state;
     FILE* file;
-    char *file_copy;
     int i;
     
     //first token
-    curtok = first = (lexeme_t*)malloc(sizeof(lexeme_t));
-    if(!curtok)
+    state = (lexer_state_t*) calloc(num_files, sizeof(lexer_state_t));
+
+    if(!state)
     {
-        fprintf(stderr, "fatal error: could not allocate memory\n");
+        fprintf(stderr, "failed to allocated memory");
         return NULL;
     }
 
+
     for(i = 0; i < num_files; i++)
     {
-        file_copy = add_file(files[i]);
         file = fopen(files[i], "r");
-        
+                
         if(!file)
         {
             fprintf(stderr, "Error opening file %s:\n %s\n", files[i], strerror(errno));
             continue;
         }
+
+        yyline = 1;
         
         yyrestart(file);
-
-        curtok->token = yylex();
-
-        while(curtok->token)
-        {  
-            curtok->line_number = yyline;
-            curtok->filename = file_copy;
-            if(program_options & LEXER_DEBUG_OPTION ) 
-            {
-                printf("File %s Line %d Token %s Text '%s'\n", 
-                    curtok->filename, curtok->line_number, yytoken_name, yytext
-                );
-            }
-            curtok->next = lasttok;
-            lasttok = curtok;
-            curtok = (lexeme_t*)malloc(sizeof(lexeme_t));
-            if(!curtok)
-            {
-                fprintf(stderr, "fatal error: could not allocate memory\n");
-                fclose(file);
-                return NULL;
-            }
-            if(lasttok)
-                lasttok->prev = curtok;
-            curtok->token = yylex();
-        }
+        state[i].number_of_files = 0;
+        fill_state(state + i, files[i]);
+        
         fclose(file);
     }
     
-    lasttok->prev = NULL;
-    free(curtok);
-    return lasttok;
+    return state;
 }
 
-static char *add_file(const char* file)
+static int fill_state(lexer_state_t *state, char *file)
+{
+    lexeme_t *curtok;
+    char *file_copy;
+    int stack;
+    
+    file_copy = add_file(file, state);
+
+    if(file_copy == NULL)
+        return -1;
+
+    curtok = (lexeme_t*) calloc(1, sizeof(lexeme_t));
+    if(!curtok)
+    {
+        fprintf(stderr, "fatal error: could not allocate memory\n");
+        return -1;
+    }
+    //if this is a fresh state then set the first token point to this token
+    
+    for(stack = 0; stack < FILE_STACK_SIZE; stack++)
+    {
+        if(state->file_stack[stack] == NULL);
+        {
+            state->file_stack[stack] = file_copy;
+            break;
+        }
+        if(!strcmp(file_copy, state->file_stack[i]))
+        {
+            fprintf(stderr, "include cycle detected %s, %s", line, dup);
+            return -1;
+        }
+    }
+    if(stack == FILE_STACK_SIZE)
+    {
+        fprintf(stderr, "max include  depth reached");
+        return -1;
+    }
+    curtok->token = yylex();
+
+    while(curtok->token)
+    {  
+        curtok->line_number = yyline;
+        curtok->filename = file_copy;
+       
+        if(!process_token(state, curtok))
+        {
+
+            curtok->next = state->cur;
+            if(state->cur)
+                state->cur->prev = curtok;
+            state->cur = curtok;
+            if(!state->first)
+                state->first = curtok;
+            curtok = (lexeme_t*)calloc(1, sizeof(lexeme_t));
+            if(!curtok)
+            {
+                fprintf(stderr, "fatal error: could not allocate memory\n");
+                return -1;
+            }
+        }
+        curtok->token = yylex();
+    }
+    state->file_stack[stack] = NULL;
+    free(curtok);
+    return 0;
+}
+
+static int process_token(lexer_state_t *state, lexeme_t *token)
+{
+    char token_name[20], *dup;
+    int line, token_num, length, i;
+    FILE *file;
+    YY_BUFFER_STATE lex_buff;
+
+    switch(token->token)
+    {
+        case STRCONST_TOKEN:
+            dup = (char*) malloc(sizeof(char)*strlen(yytext));
+            if(!dup)
+            {
+                fprintf(stderr, "failed to allocate memory");
+            }
+            token->value = dup;
+            break;
+        case INTCONST_TOKEN:
+            token->value = (void*) malloc(sizeof(int));
+            if(!token->value)
+            {
+                fprintf(stderr, "could not allocate memory");
+            }
+            *(int*)(token->value) = atoi(yytext);
+            break;
+        case HEXCONST_TOKEN:
+            token->value = malloc(sizeof(int));
+            if(!token->value)
+            {
+                fprintf(stderr, "could not allocate memory");
+            }
+            *(int*)(token->value) = strtol(yytext, NULL, 0);
+            break;
+        case REALCONST_TOKEN:
+            token->value = (void*) malloc(sizeof(float));
+            if(!token->value)
+            {
+                fprintf(stderr, "could not allocate memory");
+            }
+            *(float*)(token->value) = strtof(yytext, NULL);
+            break;
+        case CHARCONST_TOKEN:
+            token->value = (void*) malloc(4);
+            if(!token->value)
+            {
+                fprintf(stderr, "could not allocate memory");
+            }
+            strcpy(token->value, yytext);
+            break;
+        case INCLUDE_TOKEN:
+            line = yyline;
+            yyline = 1;
+            token_num = yylex();
+            if(token_num != STRCONST_TOKEN && token_num != INCLUDE_FILE_TOKEN && token_num != NEWLINE_TOKEN)
+            {
+                fprintf(stderr, "invalid import on line %d: %s\n", line, yytext);
+                return -1;
+            }
+            else if(toke_num == NEWLINE_TOKEN)
+            {
+                fprintf(stderr, "invalid import on line %s: no file provided", line);
+            }
+            else if(token_num == STRCONST_TOKEN)
+            {
+                length = strlen(yytext);
+                dup = (char*) calloc(1, sizeof(char) * (strlen(token->filename)+length));
+                dup = strcpy(dup, token->filename);
+                dirname(dup);
+                strcat(dup, "/");
+            }
+            else
+            {
+                fprintf(stderr, "not supporting includes from system files: %s\n", yytext);
+                return -1;
+                //length = strlen(yytext);
+                //dup = (char*) calloc(1 , sizeof(char) * (length + 13));
+                //dup = strcpy(dup, "/usr/include/");
+            }
+            dup = strncat(dup, yytext+1, length-2);
+            file = fopen(dup, "r");
+            if(!file)
+            {
+                fprintf(stderr, "include failure: failed to open file %s\n%s\n", dup, strerror(errno));
+                free(dup);
+                yyline = line;
+                return -1;
+            }
+            lex_buff = yy_create_buffer(file, YY_BUF_SIZE);
+            yypush_buffer_state(lex_buff);
+            fill_state(state, dup);
+            yypop_buffer_state();
+            yyline = line;
+            fclose(file);
+            free(dup);
+            return -1;
+        case DEFINE_TOKEN:
+            return -1;
+        case UNDEF_TOKEN:
+            return -1;
+        case ENDIF_TOKEN:
+            return -1;
+        case ELIF_TOKEN:
+            return -1;
+        case IFDEF_TOKEN:
+            return -1;
+        case IFNDEF_TOKEN:
+            return -1;
+        case ElSE_DIREC_TOKEN:
+            return -1;
+        case NEWLINE_TOKEN:
+            return -1;
+    }
+    if(program_options & LEXER_DEBUG_OPTION ) 
+    {
+        tok_to_str(token_name, token->token);
+        printf("File %s Line %d Token %s Text '%s'\n", 
+            token->filename, token->line_number, token_name, yytext
+        );
+    }
+    return 0;
+}
+
+static char *add_file(const char* file, lexer_state_t *state)
 {
     char **temp;
     char *dup;
 
-    if(number_of_files % SIZE_OF_FILE_ARRAY == 0)
+    if(state->number_of_files % SIZE_OF_FILE_ARRAY == 0)
     {
-        temp = realloc( file_strings, sizeof(char*) * (number_of_files + SIZE_OF_FILE_ARRAY));
+        temp = realloc( state->file_strings, sizeof(char*) * (state->number_of_files + SIZE_OF_FILE_ARRAY));
         if(temp == NULL)
         {
             fprintf(stderr, "failed to allocate memory.\n");
             return NULL;
         }
-        file_strings = temp;
+        state->file_strings = temp;
     }
 
     dup = (char*) malloc(sizeof(char*) * strlen(file));
@@ -102,32 +268,34 @@ static char *add_file(const char* file)
     
     strcpy(dup, file);
 
-    file_strings[number_of_files] = dup;
-    number_of_files++;
+    state->file_strings[state->number_of_files] = dup;
+    state->number_of_files++;
     return dup;
 }
 
-void clean_lexer()
+void clean_lexer(lexer_state_t *state)
 {
     int i;
     lexeme_t *cur, *next;
 
-    for(i = 0; i < number_of_files; i++)
+    for(i = 0; i < state->number_of_files; i++)
     {
-        free(file_strings[i]);
+        free(state->file_strings[i]);
     }
 
-    free(file_strings);
+    free(state->file_strings);
     
-    cur = first;
+    cur = state->first;
     next = cur->prev;
-    while(next)
+    while(cur)
     {
+        if(cur->value)
+            free(cur->value);
+        next = cur->prev;
         free(cur);
         cur = next;
-        next = cur->prev;
     }
-    free(cur);
+    free(state);
 }
 
 void tok_to_str(char* buff, int token)
@@ -135,160 +303,181 @@ void tok_to_str(char* buff, int token)
     switch(token)
     {
         case INCLUDE_TOKEN:
-            strcpy(yytoken_name, "INCLUDE");
+            strcpy(buff, "INCLUDE");
             break;
         case DEFINE_TOKEN:
-            strcpy(yytoken_name, "DEFINE");
+            strcpy(buff, "DEFINE");
+            break;
+        case UNDEF_TOKEN:
+            strcpy(buff, "UNDEF");
             break;
         case TYPE_TOKEN:
-            strcpy(yytoken_name, "TYPE");
+            strcpy(buff, "TYPE");
             break;
         case FOR_TOKEN:
-            strcpy(yytoken_name, "FOR");
+            strcpy(buff, "FOR");
             break;
         case WHILE_TOKEN:
-            strcpy(yytoken_name, "WHILE");
+            strcpy(buff, "WHILE");
             break;
         case DO_TOKEN:
-            strcpy(yytoken_name, "DO");
+            strcpy(buff, "DO");
             break;
         case IF_TOKEN:
-            strcpy(yytoken_name, "IF");
+            strcpy(buff, "IF");
             break;
         case ELSE_TOKEN:
-            strcpy(yytoken_name, "ELSE");
+            strcpy(buff, "ELSE");
             break;
         case BREAK_TOKEN:
-            strcpy(yytoken_name, "BREAK");
+            strcpy(buff, "BREAK");
             break;
         case CONTINUE_TOKEN:
-            strcpy(yytoken_name, "CONTINUE");
+            strcpy(buff, "CONTINUE");
             break;
         case RETURN_TOKEN:
-            strcpy(yytoken_name, "RETURN");
+            strcpy(buff, "RETURN");
             break;
         case IDENT_TOKEN:
-            strcpy(yytoken_name, "IDENT");
+            strcpy(buff, "IDENT");
             break;
         case INTCONST_TOKEN:
-            strcpy(yytoken_name, "INTCONST");
+            strcpy(buff, "INTCONST");
+            break;
+        case HEXCONST_TOKEN:
+            strcpy(buff, "HEXCONST");
             break;
         case STRCONST_TOKEN:
-            strcpy(yytoken_name, "STRCONST");
+            strcpy(buff, "STRCONST");
             break;
         case CHARCONST_TOKEN:
-            strcpy(yytoken_name, "CHARCONST");
+            strcpy(buff, "CHARCONST");
             break;
         case INCLUDE_FILE_TOKEN:
-            strcpy(yytoken_name, "INCLUDE_FILE");
+            strcpy(buff, "INCLUDE_FILE");
             break;
         case LPAR_TOKEN:
-            strcpy(yytoken_name, "LPAR");
+            strcpy(buff, "LPAR");
             break;
         case RPAR_TOKEN:
-            strcpy(yytoken_name, "RPAR");
+            strcpy(buff, "RPAR");
             break;
         case LBRACKET_TOKEN:
-            strcpy(yytoken_name, "LBRACKET");
+            strcpy(buff, "LBRACKET");
             break;
         case RBRACKET_TOKEN:
-            strcpy(yytoken_name, "RBRACKET");
+            strcpy(buff, "RBRACKET");
             break;
         case LBRACE_TOKEN:
-            strcpy(yytoken_name, "LBRACE");
+            strcpy(buff, "LBRACE");
             break;
         case RBRACE_TOKEN:
-            strcpy(yytoken_name, "RBRACE");
+            strcpy(buff, "RBRACE");
             break;
         case COMMA_TOKEN:
-            strcpy(yytoken_name, "COMMA");
+            strcpy(buff, "COMMA");
             break;
         case SEMI_TOKEN:
-            strcpy(yytoken_name, "SEMI");
+            strcpy(buff, "SEMI");
             break;
         case QUEST_TOKEN:
-            strcpy(yytoken_name, "QUEST");
+            strcpy(buff, "QUEST");
             break;
         case COLON_TOKEN:
-            strcpy(yytoken_name, "COLON");
+            strcpy(buff, "COLON");
             break;
         case EQUAL_TOKEN:
-            strcpy(yytoken_name, "EQUAL");
+            strcpy(buff, "EQUAL");
             break;
         case NEQUAL_TOKEN:
-            strcpy(yytoken_name, "NEQUAL");
+            strcpy(buff, "NEQUAL");
             break;
         case GT_TOKEN:
-            strcpy(yytoken_name, "GT");
+            strcpy(buff, "GT");
             break;
         case GE_TOKEN:
-            strcpy(yytoken_name, "GE");
+            strcpy(buff, "GE");
             break;
         case LT_TOKEN:
-            strcpy(yytoken_name, "LT");
+            strcpy(buff, "LT");
             break;
         case LE_TOKEN:
-            strcpy(yytoken_name, "LE");
+            strcpy(buff, "LE");
             break;
         case PLUS_TOKEN:
-            strcpy(yytoken_name, "PLUS");
+            strcpy(buff, "PLUS");
             break;
         case MINUS_TOKEN:
-            strcpy(yytoken_name, "MINUS");
+            strcpy(buff, "MINUS");
             break;
         case STAR_TOKEN:
-            strcpy(yytoken_name, "STAR");
+            strcpy(buff, "STAR");
             break;
         case SLASH_TOKEN:
-            strcpy(yytoken_name, "SLASH");
+            strcpy(buff, "SLASH");
             break;
         case MOD_TOKEN:
-            strcpy(yytoken_name, "MOD");
+            strcpy(buff, "MOD");
             break;
         case TILDE_TOKEN:
-            strcpy(yytoken_name, "TILDE");
+            strcpy(buff, "TILDE");
             break;
         case PIPE_TOKEN:
-            strcpy(yytoken_name, "PIPE");
+            strcpy(buff, "PIPE");
             break;
         case BANG_TOKEN:
-            strcpy(yytoken_name, "BANG");
+            strcpy(buff, "BANG");
             break;
         case AMP_TOKEN:
-            strcpy(yytoken_name, "AMP");
+            strcpy(buff, "AMP");
             break;
         case DAMP_TOKEN:
-            strcpy(yytoken_name, "DAMP");
+            strcpy(buff, "DAMP");
             break;
         case DPIPE_TOKEN:
-            strcpy(yytoken_name, "DPIPE");
+            strcpy(buff, "DPIPE");
             break;
         case ASSIGN_TOKEN:
-            strcpy(yytoken_name, "ASSIGN");
+            strcpy(buff, "ASSIGN");
             break;
         case PLUSASSIGN_TOKEN:
-            strcpy(yytoken_name, "PLUSASSIGN");
+            strcpy(buff, "PLUSASSIGN");
             break;
         case MINUSASSIGN_TOKEN:
-            strcpy(yytoken_name, "MINUSASSIGN");
+            strcpy(buff, "MINUSASSIGN");
             break;
         case STARASSIGN_TOKEN:
-            strcpy(yytoken_name, "STARASSIGN");
+            strcpy(buff, "STARASSIGN");
             break;
         case SLASHASSIGN_TOKEN:
-            strcpy(yytoken_name, "SLASHASSIGN");
+            strcpy(buff, "SLASHASSIGN");
             break;
         case INCR_TOKEN:
-            strcpy(yytoken_name, "INCR");
+            strcpy(buff, "INCR");
             break;
         case DECR_TOKEN:
-            strcpy(yytoken_name, "DECR");
+            strcpy(buff, "DECR");
             break;
         case UNKNOWN_TOKEN:
-            strcpy(yytoken_name, "UNKNOWN");
+            strcpy(buff, "UNKNOWN");
             break;
         case REALCONST_TOKEN:
-            strcpy(yytoken_name, "REALCONST");
+            strcpy(buff, "REALCONST");
+            break;
+        case IFNDEF_TOKEN:
+            strcpy(buff, "IFNDEF");
+            break;
+        case IFDEF_TOKEN: 
+            strcpy(buff, "IFDEF");
+            break;
+        case ENDIF_TOKEN:
+            strcpy(buff, "ENDIF");
+            break;
+        case ELIF_TOKEN:
+            strcpy(buff, "ELIF");
+            break;
+        case ElSE_DIREC_TOKEN:
+            strcpy(buff, "ELSE_DIRECTIVE");
             break;
     }
 }
