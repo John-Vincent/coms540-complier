@@ -6,9 +6,9 @@ int yyline=1;
 
 TYPE            int|char|void|float
 IDENT           [_a-zA-Z][_a-zA-Z0-9]*
-INTCONST        [0-9]+
+INTCONST        -?[0-9]+
 HEXCONST        0x[0-9a-fA-F]+
-REALCONST       [0-9]*\.?[0-9]+(?:e-?[0-9]*)?
+REALCONST       -?[0-9]*\.?[0-9]+(?:e-?[0-9]*)?
 STRCONST        \"([^\n]|\\\n)*([^\\\n]\"|\\\n\")
 INCLUDEFILE     <[^>]+>
 CHARCONST       '\\.'|'[^\\]' 
@@ -26,18 +26,17 @@ ENDIF           #endif
 UNDEF           #undef
 
 %x COMMENT
-%x DIRECTIVE
 
 %%
 
-{INCLUDE}                    { BEGIN(DIRECTIVE); return INCLUDE_TOKEN; }
-{DEFINE}                     { BEGIN(DIRECTIVE); return DEFINE_TOKEN; }
-{UNDEF}                      { BEGIN(DIRECTIVE); return UNDEF_TOKEN; }
-{IFDEF}                      { BEGIN(DIRECTIVE); return IFDEF_TOKEN; }
-{IFNDEF}                     { BEGIN(DIRECTIVE); return IFNDEF_TOKEN; }
-{ENDIF}                      { BEGIN(DIRECTIVE); return ENDIF_TOKEN; }
-{ELIF}                       { BEGIN(DIRECTIVE); return ELIF_TOKEN; }
-{ELSE}                       { BEGIN(DIRECTIVE); return ElSE_DIREC_TOKEN; }
+{INCLUDE}                    { return INCLUDE_TOKEN; }
+{DEFINE}                     { return DEFINE_TOKEN; }
+{UNDEF}                      { return UNDEF_TOKEN; }
+{IFDEF}                      { return IFDEF_TOKEN; }
+{IFNDEF}                     { return IFNDEF_TOKEN; }
+{ENDIF}                      { return ENDIF_TOKEN; }
+{ELIF}                       { return ELIF_TOKEN; }
+{ELSE}                       { return ELSE_DIREC_TOKEN; }
 "void"|"char"|"int"|"float"  { return TYPE_TOKEN; }
 "for"                        { return FOR_TOKEN; }
 while                        { return WHILE_TOKEN; }
@@ -88,8 +87,7 @@ return                       { return RETURN_TOKEN; }
 "/="                         { return SLASHASSIGN_TOKEN; }
 "++"                         { return INCR_TOKEN; }
 "--"                         { return DECR_TOKEN; }
-<DIRECTIVE>"\n"              { yyline++; BEGIN(INITIAL); return NEWLINE_TOKEN; }
-"\n"                         { yyline++; }
+"\n"                         { yyline++; return NEWLINE_TOKEN; }
 {CCOMMENT}                   { /* IGNORE TEXT */ }
 {WHITESPACE}*                { /* IGNORE TEXT */ }
 {CPPCOMSTRT}                 { BEGIN(COMMENT); }

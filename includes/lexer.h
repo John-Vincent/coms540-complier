@@ -2,7 +2,7 @@
 #define LEXER_H
 
 #include <stdint.h>
-#include "../../includes/hashmap.h"
+#include "hashmap.h"
 
 //size copied from the c lex file
 #ifndef YY_BUF_SIZE
@@ -27,6 +27,7 @@ typedef struct lexeme
 {
     char* filename;
     int line_number;
+    int dont_free;
     uint8_t token;
     //only set for some tokens
     void *value;
@@ -34,16 +35,25 @@ typedef struct lexeme
     struct lexeme* prev;
 } lexeme_t;
 
+typedef struct def_map
+{
+    int size;
+    lexeme_t *list;
+    char *key;
+} def_map_t;
+
 typedef struct lexer_state
 {
     char **file_strings;
     char **file_stack;
+    char *cur_file;
     int stack_size;
     map_t def_map;
     int number_of_files;
     lexeme_t *cur;
     lexeme_t *first;
 } lexer_state_t;
+
 
 //functions in lex c 
 YY_BUFFER_STATE yy_create_buffer ( FILE *file, int size  );

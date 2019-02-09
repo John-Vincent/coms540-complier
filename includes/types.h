@@ -57,7 +57,7 @@
     #define IFDEF_TOKEN         0x36
     #define ENDIF_TOKEN         0x37
     #define ELIF_TOKEN          0x38
-    #define ElSE_DIREC_TOKEN    0x39
+    #define ELSE_DIREC_TOKEN    0x39
     #define HEXCONST_TOKEN      0x3A
     #define UNDEF_TOKEN         0x3B
     #define NEWLINE_TOKEN       0x3C

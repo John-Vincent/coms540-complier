@@ -9,13 +9,68 @@
 
 #define SIZE_OF_FILE_ARRAY      100
 #define FILE_STACK_SIZE         32
+#define DEFINE_LIST_SIZE        20
 #define INCLUDE_CYCLE           -2
 
+/**
+ * makes a copy of a file string
+ * and adds that copy to the array of file
+ * strings stored in the lexer state. 
+ * this allows me to have a filename reference
+ * that i know won't be freed until the lexer state
+ * itself is freed.
+ */
 static char *add_file(const char* file, lexer_state_t *state);
 
+/**
+ * this function takes a state and a token and determains what, if any,
+ * special actions need to be taken to accept that token
+ * this function also prints the token information if in lexer debug mode.
+ * This function will interpret includes and call off to fill state once the file to
+ * be included is opend and set up with lex.
+ * returns 0 if the lexeme should be added to the state, and -1 if it is a directive
+ * or special case that should be ignored.
+ */
 static int process_token(lexer_state_t *state, lexeme_t *token);
 
+/**
+ * This function takes a state and adds the following definition
+ * indetifier and value to the definition hashmap on the state.
+ */
+static int add_definition(lexer_state_t *state);
+
+/**
+ * This function adds a lexeme to the front of the lexer state
+ * lexeme linked list.
+ */
+static int add_lexeme(lexer_state_t *state, lexeme_t **lexeme);
+
+/**
+ * This function takes an identifier definition maping and places its values 
+ * onto the lexer state linked list. If in lexer debug mode it also prints these
+ * lexemes as it replaces the identifier. It will handled nested defined identifiers itself.
+ */
+static void resolve_ident(lexer_state_t *state, def_map_t *map, char* filename);
+
+/**
+ *  This function handles ifdef and ifndef directives, as well as 
+ *  the subsiquent #else #elif and #endif
+ */
+static int handle_ifdef(lexer_state_t *state, int ndef, char* file);
+
+/**
+ *  This function is called after lex is set up to read a new file
+ *  This functin will add the filename to the file list in the state
+ *  then start processing and adding lexemes to the state.
+ */
 static int fill_state(lexer_state_t *state, char *file);
+
+/**
+ *  This function is meant to be passed to the iterate function
+ *  of the definition hashmap. It will take care of freeing all the
+ *  allocated memory in the definition maps stored in the hashmap.
+ */
+static int clean_def_map(void *nothing, void *map);
 
 lexer_state_t *lexical_analysis(int num_files, char** files)
 {
@@ -47,6 +102,12 @@ lexer_state_t *lexical_analysis(int num_files, char** files)
         
         yyrestart(file);
         state[i].file_stack = (char**) calloc(FILE_STACK_SIZE, sizeof(char*));
+        if(!state[i].file_stack)
+        {
+            fprintf(stderr, "failed to allocate memory\n");
+            fclose(file);
+            continue;
+        }
         state[i].stack_size = FILE_STACK_SIZE;
         state[i].number_of_files = 0;
         state[i].def_map = hashmap_new();
@@ -54,9 +115,9 @@ lexer_state_t *lexical_analysis(int num_files, char** files)
         fill_state(state + i, files[i]);
         
         fclose(file);
+        yypop_buffer_state();
         free(state[i].file_stack);
         state[i].stack_size = 0;
-        state[i].stack_index = 0;
         state[i].cur = state[i].first;
     }
     
@@ -73,7 +134,6 @@ static int fill_state(lexer_state_t *state, char *file)
 
     if(file_copy == NULL)
         return -1;
-
     
     if(state->file_stack[state->stack_size - 1] != NULL)
     {
@@ -100,6 +160,8 @@ static int fill_state(lexer_state_t *state, char *file)
         }
     }
 
+    state->cur_file = file_copy;
+
     curtok = (lexeme_t*) calloc(1, sizeof(lexeme_t));
     if(!curtok)
     {
@@ -115,13 +177,7 @@ static int fill_state(lexer_state_t *state, char *file)
        
         if(!process_token(state, curtok))
         {
-
-            curtok->next = state->cur;
-            if(state->cur)
-                state->cur->prev = curtok;
-            state->cur = curtok;
-            if(!state->first)
-                state->first = curtok;
+            add_lexeme(state, &curtok);
             curtok = (lexeme_t*)calloc(1, sizeof(lexeme_t));
             if(!curtok)
             {
@@ -136,28 +192,205 @@ static int fill_state(lexer_state_t *state, char *file)
     return 0;
 }
 
+static int add_definition(lexer_state_t *state)
+{
+    int token, i, j, size;
+    char *dup;
+    lexeme_t *list, *temp;
+    def_map_t *map;
+
+    token = yylex();
+    if(token != IDENT_TOKEN)
+    {
+        fprintf(stderr, "expected identifier for definition but got %s\nignoring definition\n", yytext);
+        while(token != NEWLINE_TOKEN)
+            token = yylex();
+        return -2;
+    }
+    //adding two because i keep getting invalid writes from valgrind when i don't
+    dup = (char*) calloc(1, strlen(yytext)+2);
+    if(!dup)
+    {
+        fprintf(stderr, "failed to allocate memory");
+        return -1;
+    }
+    dup = strcpy(dup, yytext);
+    size = DEFINE_LIST_SIZE;
+    list = (lexeme_t*) malloc(sizeof(lexeme_t) * size);
+    if(!list)
+    {
+        fprintf(stderr, "failed to allocate memory");
+        return -1;
+    }
+    list->prev = NULL;
+    list->next = NULL;
+    i = 0;
+    token = yylex();
+    while(token != NEWLINE_TOKEN)
+    {
+        list[i].token = token;
+        list[i].filename = NULL;
+        list[i].value = NULL;
+        list[i].line_number = yyline;
+        if( token == DEFINE_TOKEN ||
+            token == UNDEF_TOKEN ||
+            token == IFNDEF_TOKEN ||
+            token == ENDIF_TOKEN ||
+            token == ELSE_DIREC_TOKEN ||
+            token == INCLUDE_TOKEN)
+        {
+            fprintf(stderr, "directives in define are not supported: %s, %s:%d\n", yytext, state->cur_file, yyline);
+        }
+        if(!process_token(state, list+i))
+        {
+            i++;
+            if(i >= size-1)
+            {
+                temp = realloc(list, size *2);
+                if(!temp)
+                {
+                    fprintf(stderr, "memory allocation failed\n");
+                    return -1;
+                }
+                list = temp;
+                size = size * 2;
+            }
+            list[i-1].next = list+i;
+            list[i].prev = list + i - 1;
+            list[i].next = NULL;
+        }
+        token = yylex();
+    }
+    if(hashmap_get(state->def_map, dup, (void**)&map) == MAP_OK)
+    {
+        for(j = 0; j < map->size; j++)
+        {
+            if(map->list[j].value)
+                free(map->list[j].value);
+        }
+        free(map->list);
+        free(dup);
+        map->list = list;
+        map->size = i;
+        return 0;
+    }
+    map = (def_map_t*) calloc(1, sizeof(def_map_t));
+    if(!map)
+    {
+        fprintf(stderr, "failed to allocate memory\n");
+        free(list);
+        free(dup);
+        return -1;
+    }
+    map->list = list;
+    map->key = dup;
+    map->size = i;
+    hashmap_put(state->def_map, dup, map);
+    return 0;
+}
+
+static int add_lexeme(lexer_state_t *state, lexeme_t **lexeme)
+{
+    if(!state->first)
+        state->first = *lexeme;
+    if(state->cur)
+    {
+        state->cur->next = *lexeme;
+        (*lexeme)->prev = state->cur;
+        state->cur = (*lexeme);
+    }
+    else
+    {
+        state->cur = *lexeme;
+        (*lexeme)->prev = NULL;
+    }
+
+    return 0;
+}
+
+static int handle_ifdef(lexer_state_t *state, int ndef, char* file)
+{
+    int token, boolean;
+    def_map_t *map;
+    lexeme_t *cur;
+
+    token = yylex();
+    if(token != IDENT_TOKEN)
+    {
+        fprintf(stderr, "expexted identified but got %s, at %d in %s", yytext, yyline, file);
+        return -1;
+    }
+
+    hashmap_get(state->def_map, yytext, (void**)&map);
+
+    boolean = ndef && map==NULL;
+    cur = (lexeme_t*)calloc(1, sizeof(lexeme_t));
+    if(!cur)
+    {
+        fprintf(stderr, "failed to allocate memoryi\n");
+    }
+    while(1)
+    {
+        token = yylex();
+        if(token == ENDIF_TOKEN)
+            break;
+        else if (token == ELSE_DIREC_TOKEN)
+            boolean = !boolean;
+        else if (token == ELIF_TOKEN)
+        {
+            token = yylex();
+            if(token != IDENT_TOKEN)
+            {
+                fprintf(stderr, "expexted identified but got %s, at %d in %s\n", yytext, yyline, file);
+                continue;
+            }
+            boolean = hashmap_get(state->def_map, yytext, (void**)&map) == MAP_OK;
+        }
+        else if(boolean)
+        {
+            
+            cur->token = token;
+            cur->line_number = yyline;
+            cur->filename = file;
+            if(!process_token(state, cur))
+            {
+                add_lexeme(state, &cur);
+                cur = (lexeme_t*)calloc(1, sizeof(lexeme_t));
+                if(!cur)
+                {
+                    fprintf(stderr, "failed to allocate memoryi\n");
+                }            
+            }
+        }
+    }
+    free(cur);
+    return 0;
+}
+
 static int process_token(lexer_state_t *state, lexeme_t *token)
 {
-    char token_name[20], *dup;
+    char token_name[20], *dup, *file_temp;
     int line, token_num, length, i;
+    def_map_t *map;
     FILE *file;
     YY_BUFFER_STATE lex_buff;
 
     switch(token->token)
     {
         case STRCONST_TOKEN:
-            dup = (char*) malloc(sizeof(char)*strlen(yytext));
+            dup = (char*) malloc(sizeof(char)*strlen(yytext)+1);
             if(!dup)
             {
-                fprintf(stderr, "failed to allocate memory");
+                fprintf(stderr, "failed to allocate memory\n");
             }
+            strcpy(dup, yytext);
             token->value = dup;
             break;
         case INTCONST_TOKEN:
             token->value = (void*) malloc(sizeof(int));
             if(!token->value)
             {
-                fprintf(stderr, "could not allocate memory");
+                fprintf(stderr, "could not allocate memory\n");
             }
             *(int*)(token->value) = atoi(yytext);
             break;
@@ -165,7 +398,7 @@ static int process_token(lexer_state_t *state, lexeme_t *token)
             token->value = malloc(sizeof(int));
             if(!token->value)
             {
-                fprintf(stderr, "could not allocate memory");
+                fprintf(stderr, "could not allocate memory\n");
             }
             *(int*)(token->value) = strtol(yytext, NULL, 0);
             break;
@@ -173,7 +406,7 @@ static int process_token(lexer_state_t *state, lexeme_t *token)
             token->value = (void*) malloc(sizeof(float));
             if(!token->value)
             {
-                fprintf(stderr, "could not allocate memory");
+                fprintf(stderr, "could not allocate memory\n");
             }
             *(float*)(token->value) = strtof(yytext, NULL);
             break;
@@ -181,7 +414,7 @@ static int process_token(lexer_state_t *state, lexeme_t *token)
             token->value = (void*) malloc(4);
             if(!token->value)
             {
-                fprintf(stderr, "could not allocate memory");
+                fprintf(stderr, "could not allocate memory\n");
             }
             strcpy(token->value, yytext);
             break;
@@ -194,9 +427,9 @@ static int process_token(lexer_state_t *state, lexeme_t *token)
                 fprintf(stderr, "invalid import on line %d: %s\n", line, yytext);
                 return -1;
             }
-            else if(toke_num == NEWLINE_TOKEN)
+            else if(token_num == NEWLINE_TOKEN)
             {
-                fprintf(stderr, "invalid import on line %s: no file provided", line);
+                fprintf(stderr, "%s invalid import on line %d: no file provided\n",token->filename, line);
                 return -1;
             }
             else if(token_num == STRCONST_TOKEN)
@@ -226,33 +459,75 @@ static int process_token(lexer_state_t *state, lexeme_t *token)
             }
             lex_buff = yy_create_buffer(file, YY_BUF_SIZE);
             yypush_buffer_state(lex_buff);
+            file_temp = state->cur_file;
             if(fill_state(state, dup) == INCLUDE_CYCLE)
             {
-                fprintf(stderr, "include cycle detected %s, line %d", token->filename, token->line_number);
+                fprintf(stderr, "include cycle detected %s, line %d\n", token->filename, token->line_number);
             }
             yypop_buffer_state();
             yyline = line;
             fclose(file);
             free(dup);
+            state->cur_file = file_temp;
+            return -1;
+        case INCLUDE_FILE_TOKEN:
+            fprintf(stderr, "unrecognized token %s, line %d\n", yytext, yyline);
             return -1;
         case DEFINE_TOKEN:
+            add_definition(state);
             return -1;
         case UNDEF_TOKEN:
+            token_num = yylex();
+            if(token_num != IDENT_TOKEN)
+            {
+                fprintf(stderr, "expected identifier got %s in %s:%d", yytext, state->cur_file, yyline);
+                return -1;
+            }
+            if(hashmap_get(state->def_map, yytext, (void**)&map) == MAP_OK)
+            {
+                hashmap_remove(state->def_map, yytext);
+                free(map->key);
+                for(i = 0; i < map->size; i ++)
+                {
+                    if(map->list[i].value)
+                        free(map->list[i].value);
+                }
+                free(map->list);
+            }
             return -1;
         case ENDIF_TOKEN:
+            fprintf(stderr, "#endif found with no related #ifdef or #ifndef, %s:%d\n", state->cur_file, yyline);
             return -1;
         case ELIF_TOKEN:
+            fprintf(stderr, "#elif found with no related #ifdef or #ifndef, %s:%d\n", state->cur_file, yyline);
             return -1;
         case IFDEF_TOKEN:
+            handle_ifdef(state, 0, token->filename);
             return -1;
         case IFNDEF_TOKEN:
+            handle_ifdef(state, 1, token->filename);
             return -1;
-        case ElSE_DIREC_TOKEN:
+        case ELSE_DIREC_TOKEN:
+            fprintf(stderr, "#else found with no related #ifdef or #ifndef, %s:%d\n", state->cur_file, yyline);
             return -1;
+        case TYPE_TOKEN:
+            token->value = malloc(5);
+            strcpy(token->value, yytext);
+            break;
         case NEWLINE_TOKEN:
             return -1;
+        case IDENT_TOKEN:
+            if(token->filename != NULL && hashmap_get(state->def_map, yytext, (void**)&map) == MAP_OK)
+            {
+                resolve_ident(state, map, token->filename);
+                return -1;
+            }
+            token->value = malloc(strlen(yytext)+1);
+            strcpy(token->value, yytext);
+            break;
     }
-    if(program_options & LEXER_DEBUG_OPTION ) 
+    //if filename is null then this is a token for a definition and should not be printed
+    if(program_options & LEXER_DEBUG_OPTION && token->filename != NULL) 
     {
         tok_to_str(token_name, token->token);
         printf("File %s Line %d Token %s Text '%s'\n", 
@@ -306,17 +581,439 @@ void clean_lexer(lexer_state_t *state)
     free(state->file_strings);
     
     cur = state->first;
-    next = cur->prev;
-    while(cur)
+    if(cur)
     {
-        if(cur->value)
-            free(cur->value);
-        next = cur->prev;
-        free(cur);
-        cur = next;
+        next = cur->next;
+        while(cur)
+        {
+            if(cur->value)
+                free(cur->value);
+            next = cur->next;
+            free(cur);
+            cur = next;
+        }
     }
+    hashmap_iterate(state->def_map, &clean_def_map, NULL);
+
+    hashmap_free(state->def_map);
+
     free(state);
 }
+
+static int clean_def_map(void *nothing, void *map)
+{
+    int i;
+    def_map_t *def_map;
+
+    def_map = (def_map_t*) map;
+    
+    free(def_map->key);
+
+    for(i = 0; i < def_map->size; i++)
+    {
+        if(def_map->list[i].value)
+            free(def_map->list[i].value);
+    }
+
+    free(def_map->list);
+
+    free(def_map);
+    return 0;
+}
+
+static void resolve_ident(lexer_state_t *state, def_map_t *map, char* filename)
+{
+    int i;
+    char token_name[20];
+    lexeme_t *cur;
+    def_map_t *nest;
+
+    for(i = 0; i < map->size; i++)
+    {
+        cur = (lexeme_t*) calloc(1, sizeof(lexeme_t));
+        cur->filename = filename;
+        cur->line_number = yyline;
+        cur->token = map->list[i].token;
+        switch(cur->token)
+        {
+            case INTCONST_TOKEN:
+                cur->value = malloc(sizeof(int));
+                *(int*)cur->value = *(int*) map->list[i].value;
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text ''%d''\n", 
+                        filename, cur->line_number, token_name, *(int*)cur->value
+                    );
+                }
+                break;
+            case CHARCONST_TOKEN:
+                cur->value = malloc(4);
+                *(int*)cur->value = *(int*) map->list[i].value;
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '%s'\n", 
+                        filename, cur->line_number, token_name, (char*)cur->value 
+                    );
+                }
+                break;
+            case REALCONST_TOKEN:
+                cur->value = malloc(sizeof(float));
+                *(float*)cur->value = *(float*) map->list[i].value;
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '%f'\n", 
+                        filename, cur->line_number, token_name, *(float*)cur->value 
+                    );
+                }
+                break;
+            case STRCONST_TOKEN:
+                cur->value = malloc(strlen((char*)map->list[i].value));
+                strcpy((char*)cur->value, (char*)map->list[i].value);
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '%s'\n", 
+                        filename, cur->line_number, token_name, (char*)cur->value 
+                    );
+                }
+                break;
+            case HEXCONST_TOKEN:
+                cur->value = malloc(sizeof(int));
+                *(int*)cur->value = *(int*)map->list[i].value;
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '%#x'\n", 
+                        filename, cur->line_number, token_name, *(int*)cur->value
+                    );
+                }
+                break;
+            case TYPE_TOKEN:
+                cur->value = malloc(5);
+                strcpy(cur->value, map->list[i].value);
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '%s'\n", filename, cur->line_number, token_name, (char*)cur->value);
+                }
+                break;
+            case FOR_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text 'for'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case WHILE_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text 'while'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case DO_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text 'do'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case IF_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text 'if'\n", filename, cur->line_number, token_name);
+                }
+                break; 
+            case ELSE_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text 'else'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case BREAK_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text 'break'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case CONTINUE_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text 'continue'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case RETURN_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text 'return'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case IDENT_TOKEN:
+                if(hashmap_get(state->def_map, map->list[i].value, (void**)&nest) == MAP_OK)
+                {
+                    resolve_ident(state, nest, filename);
+                    continue;
+                }
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    cur->value = malloc(strlen((char*)map->list[i].value));
+                    strcpy(cur->value, map->list[i].value);
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '%s'\n", filename, cur->line_number, token_name, (char*)cur->value);
+                }
+                break;
+            case LPAR_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '('\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case RPAR_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text ')'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case LBRACKET_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '['\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case RBRACKET_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text ']'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case LBRACE_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '{'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case RBRACE_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '}'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case COMMA_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text ','\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case SEMI_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text ';'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case QUEST_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '?'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case COLON_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text ':'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case EQUAL_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '=='\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case NEQUAL_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '!='\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case GT_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '>'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case GE_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '>='\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case LT_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '<'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case LE_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '<='\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case PLUS_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '+'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case MINUS_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '-'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case STAR_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '*'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case SLASH_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '/'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case MOD_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '%%'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case TILDE_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '~'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case PIPE_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '|'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case BANG_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '!'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case AMP_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '&'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case DAMP_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '&&'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case DPIPE_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '||'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case ASSIGN_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '='\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case PLUSASSIGN_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '+='\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case MINUSASSIGN_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '-='\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case STARASSIGN_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '*='\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case SLASHASSIGN_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '/='\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case INCR_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '++'\n", filename, cur->line_number, token_name);
+                }
+                break;
+            case DECR_TOKEN:
+                if(program_options & LEXER_DEBUG_OPTION && filename != NULL) 
+                {
+                    tok_to_str(token_name, cur->token);
+                    printf("File %s Line %d Token %s Text '--'\n", filename, cur->line_number, token_name);
+                }
+                break;
+        }
+        add_lexeme(state, &cur);
+    }
+}
+
+
 
 void tok_to_str(char* buff, int token)
 {
@@ -496,7 +1193,7 @@ void tok_to_str(char* buff, int token)
         case ELIF_TOKEN:
             strcpy(buff, "ELIF");
             break;
-        case ElSE_DIREC_TOKEN:
+        case ELSE_DIREC_TOKEN:
             strcpy(buff, "ELSE_DIRECTIVE");
             break;
     }

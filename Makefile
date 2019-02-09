@@ -60,7 +60,9 @@ $(DBIN)/.:
 #allow for creating bin directories on the fly
 .SECONDEXPANSION:
 
+#make to run latex twice to get the page numbers generated.
 $(DBIN)/%.pdf: $(DSRC)/%.tex | $$(@D)/.
+	@$(TEXC) $(TEXFLAGS) $< >> $(BIN)/latexgarbage.txt
 	@$(TEXC) $(TEXFLAGS) $< >> $(BIN)/latexgarbage.txt
 	@rm $(DBIN)/*.log $(BIN)/latexgarbage.txt
 
