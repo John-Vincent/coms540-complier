@@ -27,7 +27,6 @@ typedef struct lexeme
 {
     char* filename;
     int line_number;
-    int dont_free;
     uint8_t token;
     //only set for some tokens
     void *value;

@@ -5,6 +5,7 @@
 * to make all the pdf documents run `make docs`
 * to make all the source code run `make compiler`
 * to make both (defaul) just run `make`
+* to clean the directory run `make clean`
 
 pdflatex is the program used to compile the latex files
 and gcc is used to to compile the c code, you can change this 
