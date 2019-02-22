@@ -3,6 +3,7 @@
 
     typedef union ast_value
     {
+        long l;
         int i;
         float f;
         char c;

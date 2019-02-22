@@ -127,7 +127,49 @@ lexer_state_t *lexical_analysis(int num_files, char** files)
 
 void set_lval(int token)
 {
-    
+    int size;
+
+    switch(token)
+    {
+        case TYPE:
+            if(*yytext == 'i')
+                yylval.v.i = INT;
+            else if(*yytext == 'c')
+                yylval.v.i = CHAR;
+            else if(*yytext == 'v')
+                yylval.v.i = VOID;
+            else if(*yytext == 'f')
+                yylval.v.i = FLOAT;
+            break;
+        case SCOPE:
+            if(*yytext == 'e')
+                yylval.v.i = EXTERN;
+            else
+                yylval.v.i = STATIC;
+            break;
+        case IDENT:
+            yylval.v.s = strdup(yytext);
+            break;
+        case INTCONST:
+            yylval.v.i = atoi(yytext);
+            break;
+        case HEXCONST:
+            yylval.v.l = strtol(yytext, NULL, 0);
+            break;
+        case REALCONST:
+            yylval.v.f = strtof(yytext, NULL); 
+            break;
+        case STRCONST:
+            size = strlen(yytext);
+            yylval.v.s = strndup(yytext + 1, size-2);
+            break;
+        case CHARCONST:
+            yylval.v.c = *(yytext + 1);
+            break;
+        case UNKNOWN:
+            yylval.v.c = *yytext;
+            break;
+    }
 }
 
 static int fill_state(lexer_state_t *state, char *file)

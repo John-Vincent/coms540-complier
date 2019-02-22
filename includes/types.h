@@ -27,11 +27,11 @@
     #define AMP             '&'
     #define ASSIGN          '='
     #define NEWLINE         '\n'
-    #define INT             0x100
-    #define FLOAT           0x101
-    #define VOID            0x102
-    #define CHAR            0x103
-    #define STATIC          0x104
-    #define EXTERN          0x105
+    #define INT             0x01
+    #define FLOAT           0x02
+    #define VOID            0x04
+    #define CHAR            0x08
+    #define STATIC          0x80000000
+    #define EXTERN          0x40000000
 
 #endif

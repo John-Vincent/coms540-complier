@@ -156,8 +156,16 @@ static int parse_args(int argc, char** argv)
                     if(!strcmp(argv[i], "--debug-lexer"))
                     {
                         program_options = program_options | LEXER_DEBUG_OPTION;
-                        break;
                     }
+                    else if(!strcmp(argv[i], "--lexer-save"))
+                    {
+                        program_options = program_options | LEXER_SAVE_OPTION; 
+                    } 
+                    else if(!strcmp(argv[i], "--debug-parser"))
+                    {
+                        program_options = program_options | PARSER_DEBUG_OPTION;
+                    }
+                    break;
                 default:
                     fprintf(stderr, "unrecognized option: %s, %c\n", argv[i], cur);
                     return -1;

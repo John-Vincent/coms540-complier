@@ -39,8 +39,8 @@ UNDEF           #undef
 {ENDIF}                      { BEGIN(DIRECTIVE); return ENDIF; }
 {ELIF}                       { BEGIN(DIRECTIVE); return ELIF; }
 {ELSE}                       { BEGIN(DIRECTIVE); return ELSE_DIREC; }
-"void"|"char"|"int"|"float"  { return TYPE; }
-"extern"|"static"            { return SCOPE; }
+"void"|"char"|"int"|"float"  { set_lval(TYPE); return TYPE; }
+"extern"|"static"            { set_lval(SCOPE); return SCOPE; }
 "for"                        { return FOR; }
 while                        { return WHILE; }
 do                           { return DO; } 
@@ -49,13 +49,13 @@ else                         { return ELSE; }
 break                        { return BREAK; }
 continue                     { return CONTINUE; }
 return                       { return RETURN; } 
-{IDENT}                      { return IDENT; }
-{INTCONST}                   { return INTCONST; }
-{HEXCONST}                   { return HEXCONST; }
-{REALCONST}                  { return REALCONST; }
-{STRCONST}                   { return STRCONST; }
-{CHARCONST}                  { return CHARCONST; } 
-<DIRECTIVE>{INCLUDEFILE}     { return INCLUDE_FILE; }
+{IDENT}                      { set_lval(IDENT); return IDENT; }
+{INTCONST}                   { set_lval(INTCONST); return INTCONST; }
+{HEXCONST}                   { set_lval(HEXCONST); return HEXCONST; }
+{REALCONST}                  { set_lval(REALCONST); return REALCONST; }
+{STRCONST}                   { set_lval(STRCONST); return STRCONST; }
+{CHARCONST}                  { set_lval(CHARCONST); return CHARCONST; } 
+<DIRECTIVE>{INCLUDEFILE}     { set_lval(INCLUDE_FILE); return INCLUDE_FILE; }
 "("                          { return LPAR; }
 ")"                          { return RPAR; }
 "["                          { return LBRACKET; }
@@ -98,6 +98,6 @@ return                       { return RETURN; }
 <COMMENT>{CPPCOMEND}         { BEGIN(INITIAL); }
 <COMMENT>\n                  { yyline++;}
 <COMMENT>.                   { /* IGNORE TEXT */ }
-.                            { return UNKNOWN; } 
+.                            { set_lval(UNKNOWN); return UNKNOWN; } 
 
 %%

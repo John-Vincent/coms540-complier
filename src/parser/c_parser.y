@@ -41,9 +41,12 @@ program: statement
         { add_ast_children(&ast, $1, 1); }
     ;
 
-statement: variable 
+statement: variable
+        { $$ = $1; }
     /*| function_proto 
-    | function_declar*/
+        { $$ = $1; }
+    | function_declar
+        { $$ = $1; }*/
     ;
 
 variable: SCOPE TYPE identifiers ';'
