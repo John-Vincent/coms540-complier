@@ -1,6 +1,7 @@
 %{
-#include "../../includes/types.h"
 #include "../../includes/lexer.h"
+#include "../../includes/types.h"
+#include "../parser/bison.h"
 int yyline=1;
 %}
 
@@ -26,74 +27,77 @@ ENDIF           #endif
 UNDEF           #undef
 
 %x COMMENT
+%s DIRECTIVE
 
 %%
 
-{INCLUDE}                    { return INCLUDE_TOKEN; }
-{DEFINE}                     { return DEFINE_TOKEN; }
-{UNDEF}                      { return UNDEF_TOKEN; }
-{IFDEF}                      { return IFDEF_TOKEN; }
-{IFNDEF}                     { return IFNDEF_TOKEN; }
-{ENDIF}                      { return ENDIF_TOKEN; }
-{ELIF}                       { return ELIF_TOKEN; }
-{ELSE}                       { return ELSE_DIREC_TOKEN; }
-"void"|"char"|"int"|"float"  { return TYPE_TOKEN; }
-"for"                        { return FOR_TOKEN; }
-while                        { return WHILE_TOKEN; }
-do                           { return DO_TOKEN; } 
-if                           { return IF_TOKEN; }
-else                         { return ELSE_TOKEN; }
-break                        { return BREAK_TOKEN; }
-continue                     { return CONTINUE_TOKEN; }
-return                       { return RETURN_TOKEN; } 
-{IDENT}                      { return IDENT_TOKEN; }
-{INTCONST}                   { return INTCONST_TOKEN; }
-{HEXCONST}                   { return HEXCONST_TOKEN; }
-{REALCONST}                  { return REALCONST_TOKEN; }
-{STRCONST}                   { return STRCONST_TOKEN; }
-{CHARCONST}                  { return CHARCONST_TOKEN; } 
-{INCLUDEFILE}                { return INCLUDE_FILE_TOKEN; }
-"("                          { return LPAR_TOKEN; }
-")"                          { return RPAR_TOKEN; }
-"["                          { return LBRACKET_TOKEN; }
-"]"                          { return RBRACKET_TOKEN; }
-"{"                          { return LBRACE_TOKEN; }
-"}"                          { return RBRACE_TOKEN; }
-","                          { return COMMA_TOKEN; }
-";"                          { return SEMI_TOKEN; }
-"?"                          { return QUEST_TOKEN; }
-":"                          { return COLON_TOKEN; }
-"=="                         { return EQUAL_TOKEN; }
-"!="                         { return NEQUAL_TOKEN; }
-">"                          { return GT_TOKEN; }
-">="                         { return GE_TOKEN; }
-"<"                          { return LT_TOKEN; }
-"<="                         { return LE_TOKEN; }
-"+"                          { return PLUS_TOKEN; }
-"-"                          { return MINUS_TOKEN; }
-"*"                          { return STAR_TOKEN; }
-"/"                          { return SLASH_TOKEN; }
-"%"                          { return MOD_TOKEN; }
-"~"                          { return TILDE_TOKEN; }
-"|"                          { return PIPE_TOKEN; }
-"!"                          { return BANG_TOKEN; }
-"&"                          { return AMP_TOKEN; }
-"&&"                         { return DAMP_TOKEN; }
-"||"                         { return DPIPE_TOKEN; }
-"="                          { return ASSIGN_TOKEN; }
-"+="                         { return PLUSASSIGN_TOKEN;}
-"-="                         { return MINUSASSIGN_TOKEN; }
-"*="                         { return STARASSIGN_TOKEN; }
-"/="                         { return SLASHASSIGN_TOKEN; }
-"++"                         { return INCR_TOKEN; }
-"--"                         { return DECR_TOKEN; }
-"\n"                         { yyline++; return NEWLINE_TOKEN; }
+{INCLUDE}                    { BEGIN(DIRECTIVE); return INCLUDE; }
+{DEFINE}                     { BEGIN(DIRECTIVE); return DEFINE; }
+{UNDEF}                      { BEGIN(DIRECTIVE); return UNDEF; }
+{IFDEF}                      { BEGIN(DIRECTIVE); return IFDEF; }
+{IFNDEF}                     { BEGIN(DIRECTIVE); return IFNDEF; }
+{ENDIF}                      { BEGIN(DIRECTIVE); return ENDIF; }
+{ELIF}                       { BEGIN(DIRECTIVE); return ELIF; }
+{ELSE}                       { BEGIN(DIRECTIVE); return ELSE_DIREC; }
+"void"|"char"|"int"|"float"  { return TYPE; }
+"extern"|"static"            { return SCOPE; }
+"for"                        { return FOR; }
+while                        { return WHILE; }
+do                           { return DO; } 
+if                           { return IF; }
+else                         { return ELSE; }
+break                        { return BREAK; }
+continue                     { return CONTINUE; }
+return                       { return RETURN; } 
+{IDENT}                      { return IDENT; }
+{INTCONST}                   { return INTCONST; }
+{HEXCONST}                   { return HEXCONST; }
+{REALCONST}                  { return REALCONST; }
+{STRCONST}                   { return STRCONST; }
+{CHARCONST}                  { return CHARCONST; } 
+<DIRECTIVE>{INCLUDEFILE}     { return INCLUDE_FILE; }
+"("                          { return LPAR; }
+")"                          { return RPAR; }
+"["                          { return LBRACKET; }
+"]"                          { return RBRACKET; }
+"{"                          { return LBRACE; }
+"}"                          { return RBRACE; }
+","                          { return COMMA; }
+";"                          { return SEMI; }
+"?"                          { return QUEST; }
+":"                          { return COLON; }
+"=="                         { return EQUAL; }
+"!="                         { return NEQUAL; }
+">"                          { return GT; }
+">="                         { return GE; }
+"<"                          { return LT; }
+"<="                         { return LE; }
+"+"                          { return PLUS; }
+"-"                          { return MINUS; }
+"*"                          { return STAR; }
+"/"                          { return SLASH; }
+"%"                          { return MOD; }
+"~"                          { return TILDE; }
+"|"                          { return PIPE; }
+"!"                          { return BANG; }
+"&"                          { return AMP; }
+"&&"                         { return DAMP; }
+"||"                         { return DPIPE; }
+"="                          { return ASSIGN; }
+"+="                         { return PLUSASSIGN;}
+"-="                         { return MINUSASSIGN; }
+"*="                         { return STARASSIGN; }
+"/="                         { return SLASHASSIGN; }
+"++"                         { return INCR; }
+"--"                         { return DECR; }
+<DIRECTIVE>\n                { BEGIN(INITIAL); yyline++; return NEWLINE; } 
+"\n"                         { BEGIN(INITIAL); yyline++; }
 {CCOMMENT}                   { /* IGNORE TEXT */ }
 {WHITESPACE}*                { /* IGNORE TEXT */ }
 {CPPCOMSTRT}                 { BEGIN(COMMENT); }
 <COMMENT>{CPPCOMEND}         { BEGIN(INITIAL); }
 <COMMENT>\n                  { yyline++;}
 <COMMENT>.                   { /* IGNORE TEXT */ }
-.                            { return UNKNOWN_TOKEN; } 
+.                            { return UNKNOWN; } 
 
 %%

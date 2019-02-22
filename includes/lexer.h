@@ -2,6 +2,7 @@
 #define LEXER_H
 
 #include <stdint.h>
+#include <stdio.h>
 #include "hashmap.h"
 
 //size copied from the c lex file
@@ -27,7 +28,7 @@ typedef struct lexeme
 {
     char* filename;
     int line_number;
-    uint8_t token;
+    int token;
     //only set for some tokens
     void *value;
     struct lexeme* next;
@@ -91,5 +92,7 @@ void tok_to_str(char* buff, int token);
  *  those structs
  */
 void clean_lexer(lexer_state_t *state);
+
+void set_lval(int token);
 
 #endif

@@ -5,13 +5,14 @@ BIN = ./bin
 DBIN = ./docs
 SRC = ./src
 DSRC = ./src/docs
-OBJ = ./includes
+DEFINITIONS = ./includes
 LIBDIRS = core,lexer
 
 #commands
 CC = gcc
 TEXC = pdflatex
 LEX = flex
+YACC = bison
 
 #options
 TEXFLAGS = -interaction=nonstopmode -output-directory $(DBIN)
@@ -21,7 +22,8 @@ CLIBS = -lfl
 #targets
 C_CORE = $(addprefix core/, main hashmap )
 LEXER =  $(addprefix lexer/, c_lang.yy lexer)
-C_BINARIES = $(addprefix $(BIN)/, $(addsuffix .o, $(C_CORE) $(LEXER) ))
+PARSER = $(addprefix parser/, c_parser.tab parser)
+C_BINARIES = $(addprefix $(BIN)/, $(addsuffix .o, $(PARSER) $(C_CORE) $(LEXER) ))
 DOC_FILES = $(addprefix $(DBIN)/, $(addsuffix .pdf, developers))
 
 #---- PHONY RULES
@@ -45,7 +47,7 @@ clean:
 
 #---- COMPILATION RULES
 
-.PRECIOUS: $(BIN)%/. $(BIN)/. $(DBIN)/. $(BIN)/%.yy.c
+.PRECIOUS: $(BIN)%/. $(BIN)/. $(DBIN)/. $(BIN)/%.yy.c $(BIN)/%.tab.c
 
 #rules for making an bin directories needed
 $(BIN)/.:
@@ -82,3 +84,6 @@ $(BIN)/%.o: $(BIN)/%.c | $$(@D)/.
 
 $(BIN)/%.yy.c: $(SRC)/%.l | $$(@D)/.
 	@$(LEX) -o $@ $<
+
+$(BIN)/%.tab.c: $(SRC)/%.y | $$(@D)/.
+	@$(YACC) --defines=$(BIN)/parser/bison.h --output=$@ $< 

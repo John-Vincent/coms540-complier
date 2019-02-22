@@ -1,9 +1,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include "../../includes/types.h"
 #include "../../includes/main.h"
 #include "../../includes/lexer.h"
+#include "../../includes/parser.h"
 
 //characters needed ofr on the parse args function
 #define LEXER           'l'
@@ -28,10 +28,11 @@ uint64_t program_options = INITIAL_OPTION;
  */ 
 int main(int argc, char** argv)
 {
+    int i;
     lexer_state_t *lexer;
 
     //temp to meet assigment 1 specs
-    program_options = program_options | LEXER_DEBUG_OPTION;
+    program_options = program_options | LEXER_DEBUG_OPTION | LEXER_SAVE_OPTION;
 
     file_list = (char**)malloc(sizeof(argc) * (argc-1));
 
@@ -54,14 +55,11 @@ int main(int argc, char** argv)
             return -2;
         }
     }
-    //clean up after file list
-    free(file_list);
-
     //run parser
     if(program_options & PARSER_OPTION)
     {
-        fprintf(stderr, "failed to parse input\n");
-        return -3;
+        if(parse_input(files, file_list))
+            return -3;
     }
     //run type analysis
     if(program_options & TYPE_OPTION)
@@ -82,7 +80,18 @@ int main(int argc, char** argv)
         return -7;
     }
 
-    clean_lexer(lexer);
+    if(lexer)
+    {
+        for(i = 0; i < files; i++)
+        {
+            clean_lexer(lexer + i);
+        }
+
+        free(lexer);
+    }
+
+    //clean up after file list
+    free(file_list);
 
     return 0;
 }
@@ -111,6 +120,21 @@ static int parse_args(int argc, char** argv)
                     program_options = program_options | TYPE_OPTION;
                 case PARSER:
                     program_options = program_options | PARSER_OPTION;
+                    if(main_option_set)
+                    {
+                        fprintf(
+                            stderr, 
+                            "only one of %c %c %c %c %c can be selected\n", 
+                            LEXER, 
+                            PARSER, 
+                            TYPE, 
+                            INTERMEDIATE, 
+                            COMPILE
+                        );
+                        return -1;
+                    }
+                    main_option_set = 1;
+                    break;
                 case LEXER:
                     program_options = program_options | LEXER_OPTION;
                     if(main_option_set)

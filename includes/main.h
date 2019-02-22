@@ -12,6 +12,7 @@
 #define MAIN_OPTIONS             0x1F
 #define OPTION_ERROR             0xFF
 #define LEXER_DEBUG_OPTION       0x20
+#define LEXER_SAVE_OPTION        0x40
 //runtime options for the program
 extern uint64_t program_options;
 
