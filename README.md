@@ -14,3 +14,10 @@ It does exist its in src/docs/developers.tex
 pdflatex is the program used to compile the latex files
 and gcc is used to to compile the c code, you can change this 
 with the variables in the top of the make file
+
+## runing
+
+after making run ./bin/compile [mode] [options] sourcefiles
+where mode is one of -l -p 
+and options are --debug-parser --parse-tree
+I recommend the parse tree option
