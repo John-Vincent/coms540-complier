@@ -43,18 +43,18 @@
     \clearpage
 
     \section{Introduction}
-        I am submitting this assignment 1 day late because I was told that there would be a 5 to 10 point penalty for doing so.
-        taking the extra day has allowed me to implement all of the features for this assignment include all of the extra credit
-        features. It also gave me time to track down all memory leaks and fix my memory management. I tested this code with its own 
-        source code, and since the source code had to correctly compile before I could test there was no testing on invalid C sources.
-        Even with the extra day I don't have time to do complete testing so I'm curious to see how well my program works with
-        your test cases.
-    
+        Sorry for submitting late again debugging by shift reduce errors and building my ast took way longer than I had hoped it would.
+        My parser doesn't have all the functionality that my lexer did. Most of the extra credit portions of the lexer no longer function,
+        so includes and defines just generate syntax errors. Unfortunately my logic for accomplishing all of my preprocessor tricks was tied 
+        quite heavily into code that really can't run along side bison. You didn't mention any of those features in the document for this
+        assignment and the examples don't have any directives so I'm assuming its ok to leave them broken. Either way
+        I'll see if i can restore those for the next assignment.
+
     \section{Main}
         The main file in this program interprets the command line arguments, sets the runtime options in a global variable called 
-        program\_optons, and copies all input files into a string array. Based on the options it then makes calls to the different 
-        stages of the compiler(lexer, parser, type analizer, intermediate code generate, and target language generator).
-        As of right now only the lexer works and the rest print errors.
+        program\_options, and copies all input files into a string array. Based on the options it then makes calls to the different 
+        stages of the compiler(lexer, parser, type analyzer, intermediate code generate, and target language generator).
+        As of right now only the lexer, and parser work the rest print errors.
 
     \section{Lex File}
         The lex file makes tokens for each of the tokens specified in the assignment document.
@@ -62,10 +62,13 @@
         The comment start state has a rule that matches "*/" which then sets the state back to the initial to resume
         normal tokenization. This file also defines a new global variable to go along with yytext called yyline.
         This counter is incremented for each newline that is read. It must be reset manually when the file is changed
-        as the lex rules do not notice a change it the buffer state stack. It makes the functions lexiacal\_analysis,
-        tok\_to\_str, and clean\_lexer availible in its header file. clean\_lexer frees a lexer state struct and all
-        memory owned by it. tok\_to\_str fills the first buffer argument with the string token name that corriponds
+        as the lex rules do not notice a change it the buffer state stack. It makes the functions lexical\_analysis,
+        tok\_to\_str, and clean\_lexer available in its header file. clean\_lexer frees a lexer state struct and all
+        memory owned by it. tok\_to\_str fills the first buffer argument with the string token name that corresponds
         to the token integer passed as the second argument.
+
+    \section{Bison File}
+        It does exactly what you would expect. It defines my grammar.
 
     \section{Lexer}
         This lexer program uses the lex file to scan all input files provided passed in a string array to the lexical\_analysis function.
@@ -77,8 +80,8 @@
 
             \subsubsection{struct lexer\_state}
                 This lexer\_state struct contains a hashmap of all the defined identifiers, it stores the value of the definition in a def\_map struct.
-                The state also containes a array of all file names read as a part of this compilation unit. This allows me to have a valid copy of the
-                file name that will not be freed until the state itself is freed. The state also containes a linked list of all the lexemes read 
+                The state also contains a array of all file names read as a part of this compilation unit. This allows me to have a valid copy of the
+                file name that will not be freed until the state itself is freed. The state also contains a linked list of all the lexemes read 
                 in this compilation unit. It also containers a pointer to the first token added to the state that must not be altered. This is 
                 used to free all the lexemes stored in the state. The state also contains a string array of active files, treated as a stack,
                 that is used during the lexing process to detect circular includes. This should be nulled out once the state is finished being processed. 
@@ -91,6 +94,25 @@
                 The lexeme struct represents a single link in the token link list generated by my lexer.
                 It contains links the the previous and next token, a uint\_8 for the token, a void pointer 
                 for tokens that need to store dynamic data, as well as the filename and line number it was found at.
+
+        \subsection{Public Functions}
+            
+            \subsubsection{lexical\_analysis}
+                This is the entry point for the lexer. It sets up lex to read from the files passed to it, and then starts the lexing process
+
+            \subsubsection{tok\_to\_str}
+                This function takes a buffer and a token. It then fills the buffer with the string representation of that token.
+                A size of at least 20 is recommended.
+
+            \subsubsection{clean\_lexer}
+                This function will take a lexer state argument and free all memory associated with it.
+
+            \subsubsection{set\_lval}
+                This function is called from the lex file to set any needed data into yylval so bison can get 
+                all of the information it needs.
+
+            \subsubsection{type\_to\_str}
+                This works like tok\_to\_str except for my type values, so int, float, char, char*.
 
         \subsection{Static Functions}
 
@@ -119,18 +141,18 @@
                 be ignored(all directives are ignored).
 
             \subsubsection{add\_definition}
-                This function gets the identifer for the definition and then processes all the lexemes for the definition
+                This function gets the identifier for the definition and then processes all the lexemes for the definition
                 value. It stores the lexemes in an array in the def\_map struct and exits upon getting a newline token. At the end
                 it places the def\_map created into the hashmap for definitions on the state argument.
 
             \subsubsection{add\_lexeme}
                 This function is pretty simple it just adds a lexeme to the linked list stored in the state. I wanted to unify 
-                the logic for doing this because I was doing it in many places ealier (I have since reduced the number of places that
+                the logic for doing this because I was doing it in many places earlier (I have since reduced the number of places that
                 add lexemes) and I wanted to make sure I was doing it right each time. I was having memory leaks at the start because I
                 was doing it incorrectly in some locations.
 
             \subsubsection{resolve\_ident}
-                This function is in charge of replacing identifiers with the defined values they corrispond to. Since this sidesteps the
+                This function is in charge of replacing identifiers with the defined values they correspond to. Since this sidesteps the
                 normal debug printing it also must print the tokens as it replaces them with a copy of the 
                 lexeme stored in the definition map lexeme array. Since i normally get the text for each
                 token from yytext in the printing and I don't store the text for types that are trivial I had to create
@@ -141,7 +163,7 @@
                 the definition array. This way i can just print the string stored in the value and I can treat almost all tokens the same.
 
             \subsubsection{handle\_ifdef}
-                This function works for both ifdef and ifndef. It determines if the indentifier found by lex is defined
+                This function works for both ifdef and ifndef. It determines if the identifier found by lex is defined
                 then then either continues processing or ignores the following lexemes based on that. If it finds
                 a else  directive it inverts the boolean variable it was using to change if it is ignoring or processing 
                 the lexemes. If it finds a elif it then resets the boolean variable based on if the new identifier is defined.
@@ -159,6 +181,60 @@
                 This function is passed as a function point to the hashmap iterate function.
                 This function is called with the def\_map struct stored in each node of the hashmap.
                 it frees all the memory in the struct in order to clean up the allocated memory stored in the map.
+    
+    \section{Parser}
+        
+        \subsection{Structs/Unions}
+
+            \subsubsection{ast\_value\_t}
+                This data type is a union between long, int, float, char, and c string. This is the type that is stored in my abstract syntax tree 
+                nodes for any tokens that need storage. Basically just stores all my constants and identifier strings.
+
+            \subsubsection{ast\_node\_t}
+                This data type is a struct that consist of a 3 ints, an array of itself and an ast\_value\_t. One it holds the token value, one holds the array size, 
+                one holds the array size of variables that are defined as arrays. I created the last one because I really didn't want to have to create another node 
+                to gain an extra ast\_value\_t for storing variables defined as arrays.
+
+        \subsection{Public Functions}
+
+            \subsubsection{yyerror}
+                This just prints a basic error message with the string passed from bison when a syntax error is found.
+
+            \subsubsection{parse\_input}
+                This takes the list of input files from main and generates an ast for each file. It stores each ast in an array which 
+                is the return value for the function. If certain options are set with flags it will also call a function to print
+                the visualization of the ast.
+
+            \subsubsection{new\_ast\_node}
+                This function basically just takes all the pieces of the ast\_node\_t, mallocs a new node and assigns all the values to what was passed in.
+                If you pass in null pointer for children with a value greater than 0 for the number of children it will allocate an empty array for you.
+
+            \subsubsection{new\_variable\_node}
+                at the start I couldn't think of a better way of creating my variable nodes so I made this.
+
+            \subsubsection{make\_node\_list}
+                Some of the parser rules have to be a self recursive. For theses
+                rules I really want a list where each element in the recursion is a sibling
+                of each other. This function takes my "vertical" tree and flattens it. 
+                Look at the  statement\_list rule for an example.
+
+            \subsubsection{add\_ast\_children}
+                This function will take an existing ast node and array of ast nodes, and the
+                length of the array, and concatenate the array onto the existing nodes children.
+
+            \subsubsection{preorder\_traversal}
+                This function does a preorder traversal of the ast so i can print it. it takes a starting node,
+                an arbitrary depth starting point, a function pointer and a optional argument to supply to the
+                function. It then traverses the tree incrementing depth for each recursive call.
+
+            \subsubsection{print\_node}
+                This is just the function I pass to preorder\_traversal to print the basic info about each node.
+                It also prints $depth$ spaces in front of each node so its easier to visualize the children.
+
+        \subsection{Static Functions}
+
+            \subsubsection{print\_parser\_output}
+                This function just scans the ast to pick out and print the info required for this Part2.
 
     \section{Hashmap}
         I pulled this hashmap from a project on git at \url{https://github.com/petewarden/c\_hashmap}.

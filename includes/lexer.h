@@ -95,4 +95,6 @@ void clean_lexer(lexer_state_t *state);
 
 void set_lval(int token);
 
+void type_to_str(char *buff, int type);
+
 #endif

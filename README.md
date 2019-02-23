@@ -1,5 +1,9 @@
 # Com S 540 repo #
 
+# Latex source #
+I got points off for not having my latex source last time.
+It does exist its in src/docs/developers.tex
+
 ## making files 
 
 * to make all the pdf documents run `make docs`

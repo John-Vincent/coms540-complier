@@ -1235,5 +1235,94 @@ void tok_to_str(char* buff, int token)
         case ELSE_DIREC:
             strcpy(buff, "ELSE_DIRECTIVE");
             break;
+        case SCOPE:
+            strcpy(buff, "SCOPE");
+            break;
+        case PROGRAM:
+            strcpy(buff, "PROGRAM");
+            break;
+        case STATEMENT: 
+            strcpy(buff, "STATEMENT");
+            break;
+        case VARIABLE:
+            strcpy(buff, "VARIABLE");
+            break;
+        case BINARY_OP:
+            strcpy(buff, "BINARY_OP");
+            break;
+        case CAST: 
+            strcpy(buff, "CAST");
+            break;
+        case VARIABLE_LIST:
+            strcpy(buff, "VARIABLE_LIST");
+            break;
+        case EMPTY: 
+            strcpy(buff, "EMPTY");
+            break;
+        case PARAM_LIST:
+            strcpy(buff, "PARAM_LIST");
+            break;
+        case STATEMENT_BLOCK:
+            strcpy(buff, "STATEMENT_LIST");
+            break;
+        case TURNARY:
+            strcpy(buff, "TURNARY");
+            break;
+        case EXPRESSION_LIST: 
+            strcpy(buff, "EXRPESSION_LIST:");
+            break;
+        case LVALUE:
+            strcpy(buff, "LVALUE");
+            break;
+        case FUNCTION_DEF:
+            strcpy(buff, "FUNCTION_DEF");
+            break;
+        case TYPE_NAME:
+            strcpy(buff, "TYPE_NAME");
+            break;
+        case FUNCTION_PROTO:
+            strcpy(buff, "FUNCTION_PROTO");
+            break;
+        case FUNCTION_CALL:
+            strcpy(buff, "FUNCTION_CALL");
+            break;
+        default:
+            sprintf(buff, "%d", token); 
     }
 }
+
+void type_to_str(char *buff, int type)
+{
+    switch(type & SCOPE_MASK)
+    {
+        case STATIC:
+            strcpy(buff, "STATIC ");
+            break;
+        case EXTERN:
+            strcpy(buff, "EXTERN ");
+            break;
+        default:
+            strcpy(buff, "");
+            break;
+    }
+    
+    switch(type & TYPE_MASK)
+    {
+        case INT:
+            strcat(buff, "INT");
+            break;
+        case VOID:
+            strcat(buff, "VOID");
+            break;
+        case FLOAT:
+            strcat(buff, "FLOAT");
+            break;
+        case CHAR:
+            strcat(buff, "CHAR");
+            break;
+        default:
+            strcat(buff, "UNKNOWN");
+            break;
+    }
+}
+

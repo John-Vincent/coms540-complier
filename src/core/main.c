@@ -32,7 +32,7 @@ int main(int argc, char** argv)
     lexer_state_t *lexer;
 
     //temp to meet assigment 1 specs
-    program_options = program_options | LEXER_DEBUG_OPTION | LEXER_SAVE_OPTION;
+    program_options = program_options | LEXER_DEBUG_OPTION | PARSER_OUTPUT_OPTION;
 
     file_list = (char**)malloc(sizeof(argc) * (argc-1));
 
@@ -164,6 +164,14 @@ static int parse_args(int argc, char** argv)
                     else if(!strcmp(argv[i], "--debug-parser"))
                     {
                         program_options = program_options | PARSER_DEBUG_OPTION;
+                    }
+                    else if(!strcmp(argv[i], "--parse-tree"))
+                    {
+                        program_options = program_options | PARSER_TREE_OPTION;
+                    }
+                    else if(!strcmp(argv[i], "--parse-output"))
+                    {
+                        program_options = program_options | PARSER_OUTPUT_OPTION;
                     }
                     break;
                 default:
