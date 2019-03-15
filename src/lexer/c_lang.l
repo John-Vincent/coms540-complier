@@ -7,9 +7,9 @@ int yyline=1;
 
 TYPE            int|char|void|float
 IDENT           [_a-zA-Z][_a-zA-Z0-9]*
-INTCONST        -?[0-9]+
+INTCONST        [0-9]+
 HEXCONST        0x[0-9a-fA-F]+
-REALCONST       -?[0-9]*\.?[0-9]+(?:e-?[0-9]*)?
+REALCONST       [0-9]*\.?[0-9]+(?:e-?[0-9]*)?
 STRCONST        \"([^\n]|\\\n)*([^\\\n]\"|\\\n\")
 INCLUDEFILE     <[^>]+>
 CHARCONST       '\\.'|'[^\\]' 

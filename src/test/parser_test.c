@@ -13,6 +13,13 @@ int main()
     b = 8;
     a = c = d;
     a ? b : c;
+    while(1)
+        fuck_ur_mom(a);
+
+    for(i = 0; i < ur_mum; i++)
+    {   
+        shit();
+    }
     dank(6);
 }
 

@@ -76,15 +76,6 @@ int yylex(void);
 lexer_state_t *lexical_analysis(int num, char** files);
 
 /**
- *  function that takes a token
- *  constant as the first argument
- *  and fills the buffer with the 
- *  string representation of the constant.
- *  buffer must be at least 18 bytes
- */
-void tok_to_str(char* buff, int token);
-
-/**
  *  function that will clean all memory
  *  allocated durring the lexing process
  *  this will free all lexeme_t structs 
@@ -93,8 +84,10 @@ void tok_to_str(char* buff, int token);
  */
 void clean_lexer(lexer_state_t *state);
 
+/**
+ *  this function sets the parser value 
+ *  for some tokens based on the token type.
+ */
 void set_lval(int token);
-
-void type_to_str(char *buff, int type);
 
 #endif

@@ -29,10 +29,11 @@ uint64_t program_options = INITIAL_OPTION;
 int main(int argc, char** argv)
 {
     int i;
-    lexer_state_t *lexer;
+    lexer_state_t *lexer = NULL;
+    ast_node_t *parse_trees;
 
     //temp to meet assigment 1 specs
-    program_options = program_options | LEXER_DEBUG_OPTION | PARSER_OUTPUT_OPTION;
+    program_options = program_options | PARSER_OUTPUT_OPTION;
 
     file_list = (char**)malloc(sizeof(argc) * (argc-1));
 
@@ -58,14 +59,9 @@ int main(int argc, char** argv)
     //run parser
     if(program_options & PARSER_OPTION)
     {
-        if(parse_input(files, file_list))
+         parse_trees = parse_input(files, file_list);
+         if(parse_trees == NULL)
             return -3;
-    }
-    //run type analysis
-    if(program_options & TYPE_OPTION)
-    {
-        fprintf(stderr, "failed to analyze types\n");
-        return -4;
     }
     //create intermediate code
     if(program_options & INTERMEDIATE_OPTION)
@@ -88,6 +84,15 @@ int main(int argc, char** argv)
         }
 
         free(lexer);
+    }
+
+    if(parse_trees)
+    {   
+        for(i = 0; i < files; i++)
+        {
+            free_tree_memory(parse_trees[i]);
+        }
+        free(parse_trees);
     }
 
     //clean up after file list

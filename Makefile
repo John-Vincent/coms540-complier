@@ -20,10 +20,11 @@ CFLAGS = -Werror -Wall -ggdb
 CLIBS = -lfl
 
 #targets
-C_CORE = $(addprefix core/, main hashmap )
+C_CORE = $(addprefix core/, main hashmap utils)
 LEXER =  $(addprefix lexer/, c_lang.yy lexer)
 PARSER = $(addprefix parser/, c_parser.tab parser)
-C_BINARIES = $(addprefix $(BIN)/, $(addsuffix .o, $(PARSER) $(C_CORE) $(LEXER) ))
+TYPE = $(addprefix type_checker/, symbol_table)
+C_BINARIES = $(addprefix $(BIN)/, $(addsuffix .o, $(PARSER) $(C_CORE) $(LEXER) $(TYPE) ))
 DOC_FILES = $(addprefix $(DBIN)/, $(addsuffix .pdf, developers))
 
 #---- PHONY RULES

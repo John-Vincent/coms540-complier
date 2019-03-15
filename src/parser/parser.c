@@ -2,14 +2,16 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include "../../includes/symbol_table.h"
 #include "../../includes/parser.h"
 #include "../../bin/parser/bison.h"
 #include "../../includes/types.h"
+#include "../../includes/utils.h"
 #include "../../includes/main.h"
 #include "../../includes/lexer.h"
 
 //have to have this for the yyerror function to print the file
-static char* file_string;
+char* parse_file_string;
 
 /*
  * this function takes a main program node and then
@@ -18,9 +20,11 @@ static char* file_string;
  */
 static void print_parser_output(ast_node_t node);
 
+static void free_memory(ast_node_t node, int depth, void *arg);
+
 void yyerror(const char *error)
 {
-    fprintf(stderr, "Syntax error in %s, line %d:\n\t%s\n", file_string, yyline, error);
+    fprintf(stderr, "Syntax error in %s, line %d:\n\t%s\n", parse_file_string, yyline, error);
 }
 
 ast_node_t *parse_input(int num_files, char **files)
@@ -37,12 +41,12 @@ ast_node_t *parse_input(int num_files, char **files)
         return NULL;
     }
     
-    yyast.type = PROGRAM;
+    yyast.token = PROGRAM;
 
     for(i = 0; i < num_files; i++)
     {
         file = fopen(files[i], "r");
-        file_string = files[i];
+        parse_file_string = files[i];
 
         if(!file)
         {
@@ -68,12 +72,12 @@ ast_node_t *parse_input(int num_files, char **files)
     return units;
 }
 
-ast_node_t *new_ast_node(int type, int num_children, ast_node_t *children, ast_value_t value, int array_size)
+ast_node_t *new_ast_node(int token, int type, int num_children, ast_node_t *children, ast_value_t value, int array_size)
 {
     char tok[20];
     if( program_options & PARSER_DEBUG_OPTION )
     {
-        tok_to_str(tok, type);
+        tok_to_str(tok, token);
         printf("creating ast node of type %s, value %d, array size %d\n", tok, value.i, array_size); 
     }
     ast_node_t *new;
@@ -85,8 +89,9 @@ ast_node_t *new_ast_node(int type, int num_children, ast_node_t *children, ast_v
         return NULL;
     }
     new->num_children = num_children;
-    new->type = type;
+    new->token = token;
     new->value = value;
+    new->type = type;
     new->array_size = array_size;
     if(num_children && !children)
     {
@@ -115,16 +120,20 @@ ast_node_t *new_variable_node(int scope, int type, ast_node_t *identifiers)
         kids++;
         cur = cur->children;
     }
-    
-    value.i = scope | type;
 
-    ans = new_ast_node(VARIABLE, kids, NULL, value, 0);
+    value.i = 0; 
+
+    ans = new_ast_node(VARIABLE, type, kids, NULL, value, 0);
     cur = identifiers;
     i = 0; 
 
     while(cur)
     {
         ans->children[i] = *cur;
+        if(ans->children[i].array_size)
+            ans->children[i].type = type | ARRAY;
+        else
+            ans->children[i].type = type;
         last = cur;
         cur = cur->children;
         ans->children[i].num_children = 0;
@@ -136,41 +145,32 @@ ast_node_t *new_variable_node(int scope, int type, ast_node_t *identifiers)
     return ans;
 }
 
-ast_node_t *make_node_list(int type, ast_node_t *list)
+ast_node_t *make_function_sig(ast_node_t *type_name, ast_node_t *params, int type)
 {
-    ast_node_t *cur = list, next, *ans;
-    int kids = 1, i;
+    int *p, i;
 
-    while(cur->type == NODE_LIST)
+    type_name->num_children = 1;
+    type_name->children = params;
+
+    p = malloc(sizeof(int) * (params->num_children + 1));
+
+    for(i = 0; i < params->num_children; i++)
     {
-        kids++;
-        cur = cur->children + 1;
+        p[i] = params->children[i].type;
     }
 
-    ans = new_ast_node(type, kids, NULL, (ast_value_t)0, 0);
-    cur = list;
+    type_name->token = type;
 
-    for(i = 0; i < kids; i++)
-    {
-        ans->children[i] = cur->children[0];
-        if(cur->type == NODE_LIST)
-            cur = cur->children + 1;
-    }
+    if(type == FUNCTION_PROTO)
+        p[i] = PROTO_TYPE;
+    else
+        p[i] = DEF_TYPE;
 
-    cur = list->children;
-    next = *list;
+    global_scope_add(type_name->value.s, type_name->type, parse_file_string, yyline, p);
+    set_return_type(type_name->type);
+    free(p);
 
-    while(next.type == NODE_LIST)
-    {
-        next = cur[1];
-        free(cur);
-        cur = next.children;
-    }
-
-    free(cur);
-    free(list);
-
-    return ans;
+    return type_name;
 }
 
 void add_ast_children(ast_node_t *parent, ast_node_t *children, int num_children)
@@ -180,7 +180,7 @@ void add_ast_children(ast_node_t *parent, ast_node_t *children, int num_children
 
     if(program_options & PARSER_DEBUG_OPTION)
     {
-        tok_to_str(tok, parent->type);
+        tok_to_str(tok, parent->token );
         printf("adding %d children to node of type %s\n", num_children, tok);
     }
 
@@ -208,25 +208,63 @@ void preorder_traversal(ast_node_t node, int depth, void (*func)(ast_node_t, int
     }
 }
 
+void postorder_traversal(ast_node_t node, int depth, void (*func)(ast_node_t, int, void*), void *arg)
+{
+    int i;
+
+    for(i = 0; i < node.num_children; i++)
+    {
+        postorder_traversal(node.children[i], depth+1, func, arg);
+    }
+    func(node, depth, arg);
+}
+
 void print_node(ast_node_t node, int depth, void *arg)
 {
     char tok[20], type[20];
 
-    tok_to_str(tok, node.type);
+    tok_to_str(tok, node.token);
 
-    switch(node.type)
+    switch(node.token)
     {
+        //nodes with int values
+        case INTCONST: 
+            printf("%*ctype: %s, value: %d, children %d\n", 2*depth, ' ', tok, node.value.i, node.num_children);
+            break;
+        //nodes with char values
+        case CHARCONST:
+            printf("%*ctype: %s, value: %c, children %d\n", 2*depth, ' ', tok, node.value.c, node.num_children);
+            break;
+        //ndoes with real values
+        case REALCONST:
+            printf("%*ctype: %s, value: %f, children %d\n", 2*depth, ' ', tok, node.value.f, node.num_children);
+            break;
+        //nodes with string values
+        case STRCONST:
         case TYPE_NAME:
         case IDENT:
+        case FUNCTION_CALL:
+        case LVALUE:
+            type_to_str(type, node.type);
             if(node.array_size)
-                printf("%*ctype: %s, value: %s, array size %d, children %d\n", 2*depth, ' ', tok, node.value.s, node.array_size, node.num_children);
+                printf("%*ctype: %s, value: %s, type: %s, array size %d, children %d\n", 
+                    2*depth, ' ', tok, node.value.s, type, node.array_size, node.num_children
+                );
             else
-                printf("%*ctype: %s, value: %s, children %d\n", 2*depth, ' ', tok, node.value.s, node.num_children);
+                printf("%*ctype: %s, value: %s, type: %s, children %d\n", 
+                    2*depth, ' ', tok, node.value.s, type, node.num_children
+                );
             break;
+        //special case node with type rep as value
         case TYPE:
         case VARIABLE:
-            type_to_str(type, node.value.i);
+            type_to_str(type, node.type);
             printf("%*ctype: %s, var type: %s, children %d\n", 2*depth, ' ', tok, type, node.num_children);
+            break;
+        //sepcial case node with op type as value
+        case BINARY_OP:
+            tok_to_str(type, node.value.i);
+            printf("%*ctype: %s, op: %s, children %d\n", 2*depth, ' ', tok, type, node.num_children);
             break;
         default:
             printf("%*ctype: %s, children %d\n", 2*depth, ' ', tok, node.num_children);
@@ -236,14 +274,14 @@ void print_node(ast_node_t node, int depth, void *arg)
 
 static void print_parser_output(ast_node_t node)
 {
-    int i, j;
-    ast_node_t cur;
+    int i, j, k;
+    ast_node_t cur, cur_2;
 
     printf("Global Variables: ");
     //loops through main program children to find global variables
     for(i = 0; i < node.num_children; i++)
     {
-        if(node.children[i].type == VARIABLE)
+        if(node.children[i].token == VARIABLE)
         {
             cur = node.children[i];
             for(j = 0; j < cur.num_children-1; j++)
@@ -260,32 +298,51 @@ static void print_parser_output(ast_node_t node)
     for(i = 0; i < node.num_children; i++)
     {
         cur = node.children[i];
-        if( cur.type == FUNCTION_PROTO || cur.type == FUNCTION_DEF)
+        if( cur.token == FUNCTION_PROTO || cur.token == FUNCTION_DEF)
         {
-            printf("Function: %s\n", cur.children[0].value.s);
+            printf("Function: %s\n", cur.value.s);
             printf("\tParameters: ");
 
-            cur = node.children[i].children[1];
+            cur = node.children[i].children[0];
             for(j = 0; j < cur.num_children-1; j++)
             {
                 printf("%s, ", cur.children[j].value.s);
             }
             if(cur.num_children != 0)
-                printf("%s, ", cur.children[j].value.s);
+                printf("%s", cur.children[j].value.s);
             
-            printf("\n\tLocal vars: ");
-            if( cur.type == FUNCTION_DEF)
+            if( node.children[i].token == FUNCTION_DEF)
             {
-                cur = node.children[i].children[2];
-                for(j = 0; j < cur.num_children-1; j++)
+                printf("\n\tLocal vars: ");
+                cur = node.children[i].children[1];
+                for(j = 0; j < cur.num_children; j++)
                 {
-                    printf("%s, ", cur.children[j].value.s);
+                    cur_2 = cur.children[j];
+                    for(k = 0; k < cur_2.num_children; k++)
+                    {
+                        if(k == 0 && j == 0) 
+                            printf("%s", cur_2.children[k].value.s);
+                        else
+                            printf(", %s", cur_2.children[k].value.s);
+                    }
                 }
-                if(cur.num_children != 0)
-                    printf("%s", cur.children[j].value.s);
             }
             printf("\n\n");
         }
     }
-
 }
+
+static void free_memory(ast_node_t node, int depth, void *arg)
+{
+    if(node.num_children && node.children)
+        free(node.children);
+    
+    if(node.token == TYPE_NAME || node.token == IDENT || node.token == FUNCTION_CALL || node.token == LVALUE)
+        free(node.value.s);
+}
+
+void free_tree_memory(ast_node_t node)
+{
+    postorder_traversal(node, 1, &free_memory, NULL); 
+}
+
