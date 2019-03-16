@@ -43,12 +43,8 @@
     \clearpage
 
     \section{Introduction}
-        Sorry for submitting late again debugging by shift reduce errors and building my ast took way longer than I had hoped it would.
-        My parser doesn't have all the functionality that my lexer did. Most of the extra credit portions of the lexer no longer function,
-        so includes and defines just generate syntax errors. Unfortunately my logic for accomplishing all of my preprocessor tricks was tied 
-        quite heavily into code that really can't run along side bison. You didn't mention any of those features in the document for this
-        assignment and the examples don't have any directives so I'm assuming its ok to leave them broken. Either way
-        I'll see if i can restore those for the next assignment.
+        This assignment took me a super long time and i wa in chicago still working on it, So i just slapped the last portions of it
+        together.
 
     \section{Main}
         The main file in this program interprets the command line arguments, sets the runtime options in a global variable called 
@@ -235,6 +231,13 @@
 
             \subsubsection{print\_parser\_output}
                 This function just scans the ast to pick out and print the info required for this Part2.
+
+    \section{Symbol Table}
+
+        This portion of the program facilitates the type checking aspect of the program.
+        I use multiple hashmaps to keep track of all the global and locally scoped symbols.
+        I have a bunch of functions that the parser can call to do basic type checking with the
+        symbol table.
 
     \section{Hashmap}
         I pulled this hashmap from a project on git at \url{https://github.com/petewarden/c\_hashmap}.

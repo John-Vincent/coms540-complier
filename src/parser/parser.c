@@ -93,6 +93,7 @@ ast_node_t *new_ast_node(int token, int type, int num_children, ast_node_t *chil
     new->value = value;
     new->type = type;
     new->array_size = array_size;
+    new->line_number = yyline;
     if(num_children && !children)
     {
         new->children = calloc(num_children, sizeof(ast_node_t));
@@ -141,36 +142,128 @@ ast_node_t *new_variable_node(int scope, int type, ast_node_t *identifiers)
         free(last);
         i++;
     }
-    
+    ans->line_number = yyline; 
     return ans;
 }
 
 ast_node_t *make_function_sig(ast_node_t *type_name, ast_node_t *params, int type)
 {
     int *p, i;
+    ast_node_t *func = type_name;
+    
+    type_name = realloc(params, sizeof(ast_node_t) * 2);
 
-    type_name->num_children = 1;
-    type_name->children = params;
+    if(type_name == NULL)
+    {
+        fprintf(stderr, "failed to allocate memory for function identifier node\n"); 
+        exit(-1);
+    }
+
+    func->num_children = 2;
+    func->children = type_name;
+    params = type_name + 1;
+    *params = *type_name;
+    type_name->token = IDENT;
+    type_name->num_children = 0;
+    type_name->children = NULL;
+    type_name->value.s = func->value.s;
+    type_name->type = CHAR | ARRAY;
+    type_name->line_number = yyline;
 
     p = malloc(sizeof(int) * (params->num_children + 1));
 
     for(i = 0; i < params->num_children; i++)
     {
         p[i] = params->children[i].type;
+        local_scope_add(params->children[i].value.s, params->children[i].type, parse_file_string, yyline);
     }
 
-    type_name->token = type;
+    func->token = type;
 
     if(type == FUNCTION_PROTO)
         p[i] = PROTO_TYPE;
     else
         p[i] = DEF_TYPE;
 
-    global_scope_add(type_name->value.s, type_name->type, parse_file_string, yyline, p);
-    set_return_type(type_name->type);
+    global_scope_add(type_name->value.s, func->type, parse_file_string, yyline, p);
+    set_return_type(func->type);
     free(p);
 
-    return type_name;
+    return func;
+}
+
+ast_node_t *invert_list(ast_node_t *node)
+{
+    int i;
+    ast_node_t temp;
+
+    for(i = 0; i < node->num_children/2; i++)
+    {
+        temp = node->children[i];
+        node->children[i] = node->children[node->num_children-i-1];
+        node->children[node->num_children-i-1] = temp;
+    }
+
+    return node;
+}
+
+void check_function_params(ast_node_t *node)
+{
+    int i, length = 1;
+    int *params;
+    
+    
+    if(node->children != NULL)
+    {
+        length += node->children[0].num_children;
+        params = malloc(sizeof(int) * length);
+
+        for(i = 0; i < node->children[0].num_children; i++)
+        {
+            params[i] = node->children[0].children[i].type;    
+        }
+    }
+    else
+        params = malloc(sizeof(int));
+
+    params[node->num_children] = DEF_TYPE;
+
+    if(match_params(node->value.s, params, length))
+        node->type = ERROR;
+}
+
+void process_declaration(ast_node_t *node, int local) 
+{
+    int i;
+
+    if(node->token == VARIABLE_LIST)
+    {
+        for(i = 0; i < node->num_children; i++)
+        {
+            process_declaration(node->children + i, local);
+        }
+    }
+    else
+    {
+        for(i = 0; i < node->num_children; i++)
+        {
+            if(local)
+                local_scope_add(
+                    node->children[i].value.s, 
+                    node->children[i].type, 
+                    parse_file_string, 
+                    node->children[i].line_number
+                );
+            else
+                global_scope_add(
+                    node->children[i].value.s, 
+                    node->children[i].type, 
+                    parse_file_string, 
+                    node->children[i].line_number,
+                    NULL
+                );
+        }
+    }
 }
 
 void add_ast_children(ast_node_t *parent, ast_node_t *children, int num_children)
@@ -274,7 +367,7 @@ void print_node(ast_node_t node, int depth, void *arg)
 
 static void print_parser_output(ast_node_t node)
 {
-    int i, j, k;
+    int i, j, k, p=0;
     ast_node_t cur, cur_2;
 
     printf("Global Variables: ");
@@ -284,12 +377,13 @@ static void print_parser_output(ast_node_t node)
         if(node.children[i].token == VARIABLE)
         {
             cur = node.children[i];
-            for(j = 0; j < cur.num_children-1; j++)
+            for(j = 0; j < cur.num_children; j++)
             {
-                printf("%s, ", cur.children[j].value.s);
-            }
-            if(cur.num_children != 0)
+                if(p!=0)
+                    printf(", ");
                 printf("%s", cur.children[j].value.s);
+                p++;
+            }
         }
     }
 
@@ -300,10 +394,10 @@ static void print_parser_output(ast_node_t node)
         cur = node.children[i];
         if( cur.token == FUNCTION_PROTO || cur.token == FUNCTION_DEF)
         {
-            printf("Function: %s\n", cur.value.s);
+            printf("Function: %s\n", cur.children[0].value.s);
             printf("\tParameters: ");
 
-            cur = node.children[i].children[0];
+            cur = node.children[i].children[1];
             for(j = 0; j < cur.num_children-1; j++)
             {
                 printf("%s, ", cur.children[j].value.s);
@@ -314,7 +408,7 @@ static void print_parser_output(ast_node_t node)
             if( node.children[i].token == FUNCTION_DEF)
             {
                 printf("\n\tLocal vars: ");
-                cur = node.children[i].children[1];
+                cur = node.children[i].children[2];
                 for(j = 0; j < cur.num_children; j++)
                 {
                     cur_2 = cur.children[j];

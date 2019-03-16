@@ -33,7 +33,7 @@ int main(int argc, char** argv)
     ast_node_t *parse_trees;
 
     //temp to meet assigment 1 specs
-    program_options = program_options | PARSER_OUTPUT_OPTION;
+    program_options = program_options | TYPE_OUTPUT_OPTION;
 
     file_list = (char**)malloc(sizeof(argc) * (argc-1));
 
@@ -177,6 +177,10 @@ static int parse_args(int argc, char** argv)
                     else if(!strcmp(argv[i], "--parse-output"))
                     {
                         program_options = program_options | PARSER_OUTPUT_OPTION;
+                    }
+                    else if(!strcmp(argv[i], "--type-output"))
+                    {
+                        program_options = program_options | TYPE_OUTPUT_OPTION;
                     }
                     break;
                 default:

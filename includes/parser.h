@@ -35,6 +35,7 @@
         int num_children;
         struct ast_node *children;
         ast_value_t value;
+        int line_number;
         int array_size;
     } ast_node_t;
 
@@ -65,6 +66,8 @@
 
     ast_node_t *make_function_sig(ast_node_t *type_name, ast_node_t *params, int type);
 
+    void process_declaration(ast_node_t *node, int local);
+
     /**
      *  This function will take an existing ast node and array of ast nodes, and the 
      *  length of the array, and concatinate the array onto the existing nodes children.
@@ -89,6 +92,10 @@
      *   2 * depth spaces before printing so its easier to visualize
      */
     void print_node(ast_node_t node, int depth, void *arg);
+
+    ast_node_t *invert_list(ast_node_t *node);
+
+    void check_function_params(ast_node_t *node);
 
     /**
      *   This function is used to free the children of an ast_node_t 

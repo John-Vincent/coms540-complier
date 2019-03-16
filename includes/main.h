@@ -16,6 +16,7 @@
 #define PARSER_DEBUG_OPTION      0x80
 #define PARSER_TREE_OPTION       0x100
 #define PARSER_OUTPUT_OPTION     0x200
+#define TYPE_OUTPUT_OPTION       0x400
 
 //runtime options for the program
 extern uint64_t program_options;

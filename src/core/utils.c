@@ -50,6 +50,9 @@ void type_to_str(char *buff, int type)
         case DEF_TYPE:
             strcat(buff, "DEF_TYPE");
             break;
+        case ERROR:
+            strcat(buff, "TYPE ERROR");
+            break;
         default:
             strcat(buff, "UNKNOWN");
             break;
@@ -115,106 +118,106 @@ void tok_to_str(char* buff, int token)
             strcpy(buff, "INCLUDE_FILE");
             break;
         case LPAR:
-            strcpy(buff, "LPAR");
+            strcpy(buff, "(");
             break;
         case RPAR:
-            strcpy(buff, "RPAR");
+            strcpy(buff, ")");
             break;
         case LBRACKET:
-            strcpy(buff, "LBRACKET");
+            strcpy(buff, "[");
             break;
         case RBRACKET:
-            strcpy(buff, "RBRACKET");
+            strcpy(buff, "]");
             break;
         case LBRACE:
-            strcpy(buff, "LBRACE");
+            strcpy(buff, "{");
             break;
         case RBRACE:
-            strcpy(buff, "RBRACE");
+            strcpy(buff, "}");
             break;
         case COMMA:
-            strcpy(buff, "COMMA");
+            strcpy(buff, ",");
             break;
         case SEMI:
-            strcpy(buff, "SEMI");
+            strcpy(buff, ";");
             break;
         case QUEST:
-            strcpy(buff, "QUEST");
+            strcpy(buff, "?");
             break;
         case COLON:
-            strcpy(buff, "COLON");
+            strcpy(buff, ":");
             break;
         case EQUAL:
-            strcpy(buff, "EQUAL");
+            strcpy(buff, "==");
             break;
         case NEQUAL:
-            strcpy(buff, "NEQUAL");
+            strcpy(buff, "!=");
             break;
         case GT:
-            strcpy(buff, "GT");
+            strcpy(buff, ">");
             break;
         case GE:
-            strcpy(buff, "GE");
+            strcpy(buff, ">=");
             break;
         case LT:
-            strcpy(buff, "LT");
+            strcpy(buff, "<");
             break;
         case LE:
-            strcpy(buff, "LE");
+            strcpy(buff, "<=");
             break;
         case PLUS:
-            strcpy(buff, "PLUS");
+            strcpy(buff, "+");
             break;
         case MINUS:
-            strcpy(buff, "MINUS");
+            strcpy(buff, "-");
             break;
         case STAR:
-            strcpy(buff, "STAR");
+            strcpy(buff, "*");
             break;
         case SLASH:
-            strcpy(buff, "SLASH");
+            strcpy(buff, "/");
             break;
         case MOD:
-            strcpy(buff, "MOD");
+            strcpy(buff, "%");
             break;
         case TILDE:
-            strcpy(buff, "TILDE");
+            strcpy(buff, "~");
             break;
         case PIPE:
-            strcpy(buff, "PIPE");
+            strcpy(buff, "|");
             break;
         case BANG:
-            strcpy(buff, "BANG");
+            strcpy(buff, "!");
             break;
         case AMP:
-            strcpy(buff, "AMP");
+            strcpy(buff, "&");
             break;
         case DAMP:
-            strcpy(buff, "DAMP");
+            strcpy(buff, "&&");
             break;
         case DPIPE:
-            strcpy(buff, "DPIPE");
+            strcpy(buff, "||");
             break;
         case ASSIGN:
-            strcpy(buff, "ASSIGN");
+            strcpy(buff, "=");
             break;
         case PLUSASSIGN:
-            strcpy(buff, "PLUSASSIGN");
+            strcpy(buff, "+=");
             break;
         case MINUSASSIGN:
-            strcpy(buff, "MINUSASSIGN");
+            strcpy(buff, "-=");
             break;
         case STARASSIGN:
-            strcpy(buff, "STARASSIGN");
+            strcpy(buff, "*=");
             break;
         case SLASHASSIGN:
-            strcpy(buff, "SLASHASSIGN");
+            strcpy(buff, "/=");
             break;
         case INCR:
-            strcpy(buff, "INCR");
+            strcpy(buff, "++");
             break;
         case DECR:
-            strcpy(buff, "DECR");
+            strcpy(buff, "--");
             break;
         case UNKNOWN:
             strcpy(buff, "UNKNOWN");

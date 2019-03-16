@@ -22,6 +22,8 @@
     int resolve_uop_type(int op, int type);
 
     int resolve_turnary_type(int t1, int t2, int t3);
+
+    int match_params(char *symbol, int *params, int num_params);
     
     void set_return_type(int type);
 

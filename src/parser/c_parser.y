@@ -64,7 +64,7 @@ program: program_statement
     ;
 
 program_statement: variable
-        { $$ = $1; }
+        { $$ = $1; process_declaration($1, 0); }
     | function_proto 
         { $$ = $1; }
     | function_def
@@ -74,7 +74,7 @@ program_statement: variable
 variables: 
     { $$ = new_ast_node(VARIABLE_LIST, 0, 0, NULL, yyempty_value, 0); }
     | variable_list
-    { $$ = $1; }
+    { $$ = invert_list($1); process_declaration($1, 1); }
 
 variable_list: variable
             { $$ = new_ast_node(VARIABLE_LIST, 0, 1, $1, yyempty_value, 0); } 
@@ -97,6 +97,7 @@ function_def: function_sig '{' variables statements '}'
         { $$ = $1;
           add_ast_children($$, $3, 1);
           add_ast_children($$, $4, 1);
+          $$->value.t = close_scope();
         }
     ;
 
@@ -107,7 +108,7 @@ function_sig: func_type_name '(' params ')'
 params: 
         { $$ = new_ast_node(PARAM_LIST, 0, 0, NULL, yyempty_value, 0); }
     | param_list
-        { $$ = $1; } 
+        { $$ = invert_list($1); } 
 
 param_list: type_name
         { $$ = new_ast_node(PARAM_LIST, 0, 1, $1, yyempty_value, 0); }
@@ -140,7 +141,7 @@ statement_block: '{' statements '}'
 statements:
     { $$ = new_ast_node(STATEMENT_BLOCK, 0, 0, NULL, yyempty_value, 0); }
     | statement_list
-    { $$ = $1; }
+    { $$ = invert_list($1); }
 
 
 statement_list: statement
@@ -196,9 +197,13 @@ expression: constant
     | l_value
         { $$ = $1; }
     | IDENT '(' expressions ')'
-        { $$ = new_ast_node(FUNCTION_CALL, find_type($1.s), 1, $3, $1, 0); }
+        { $$ = new_ast_node(FUNCTION_CALL, find_type($1.s), 1, invert_list($3), $1, 0); 
+            check_function_params($$);  
+        }
     | IDENT '(' ')'
-        { $$ = new_ast_node(FUNCTION_CALL, find_type($1.s), 0, NULL, $1, 0); }
+        { $$ = new_ast_node(FUNCTION_CALL, find_type($1.s), 0, NULL, $1, 0); 
+            check_function_params($$); 
+        }
     | l_value assignment expression %prec '='
         {$$ = new_ast_node($2.i, resolve_bop_type($2.i, $1->type, $3->type), 1, $1, yyempty_value, 0);
          add_ast_children($$, $3, 1);
@@ -214,7 +219,7 @@ expression: constant
             $$ = new_ast_node(BINARY_OP, resolve_bop_type($2.i, $1->type, $3->type), 1, $1, $2, 0);
             add_ast_children($$, $3, 1);
         }
-    | expression '?' expression ':' expression %prec TURNARY
+    | expression '?' expression ':' expression 
         { $$ = new_ast_node(TURNARY, resolve_turnary_type($1->type, $3->type, $5->type), 1, $1, yyempty_value, 0);
           add_ast_children($$, $3, 1);
           add_ast_children($$, $5, 1);

@@ -26,6 +26,7 @@ PARSER = $(addprefix parser/, c_parser.tab parser)
 TYPE = $(addprefix type_checker/, symbol_table)
 C_BINARIES = $(addprefix $(BIN)/, $(addsuffix .o, $(PARSER) $(C_CORE) $(LEXER) $(TYPE) ))
 DOC_FILES = $(addprefix $(DBIN)/, $(addsuffix .pdf, developers))
+SYMBOL_TEST_FILES = $(addprefix src/, $(addprefix core/, utils.c hashmap.c) type_checker/symbol_table.c)
 
 #---- PHONY RULES
 default: compile docs
@@ -35,6 +36,10 @@ compile: $(BIN)/compile
 
 docs: $(DOC_FILES)
 	@echo "made documentation files"
+
+symbol_test: $(SYMBOL_TEST_FILES) | $(BIN)/.
+	@echo "making symbol table test"
+	@$(CC) $(CFLAGS) -DTEST_SYMBOL_TABLE $(SYMBOL_TEST_FILES) -o bin/symbol_test
 
 spell: .tex
 	@aspell -t -c .tex
