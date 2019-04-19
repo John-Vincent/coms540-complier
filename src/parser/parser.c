@@ -35,9 +35,17 @@ ast_node_t *parse_input(int num_files, char **files)
 
     units = calloc(num_files, sizeof(ast_node_t));
 
+    i = init_symbol_table();
+
+    if(i)
+    {
+        fprintf(stderr, "failed to initalize symbol table\n");
+        return NULL;
+    }
+
     if(units == NULL)
     {
-        fprintf(stderr, "failed to allcate space for parse trees");
+        fprintf(stderr, "failed to allcate space for parse trees\n");
         return NULL;
     }
     
@@ -67,6 +75,17 @@ ast_node_t *parse_input(int num_files, char **files)
             preorder_traversal(units[i], 1, &print_node, NULL);
         if( program_options & PARSER_OUTPUT_OPTION )
             print_parser_output(units[i]);
+    }
+    
+    //don't continue if type errors exist
+    if(has_type_error())
+    {
+        for(i = 0; i < num_files; i++)
+        {
+            free_tree_memory(units[i]);
+        }
+        free(units);
+        return NULL;
     }
 
     return units;
@@ -340,11 +359,11 @@ void print_node(ast_node_t node, int depth, void *arg)
         case LVALUE:
             type_to_str(type, node.type);
             if(node.array_size)
-                printf("%*ctype: %s, value: %s, type: %s, array size %d, children %d\n", 
+                printf("%*ctoken: %s, value: %s, type: %s, array size %d, children %d\n", 
                     2*depth, ' ', tok, node.value.s, type, node.array_size, node.num_children
                 );
             else
-                printf("%*ctype: %s, value: %s, type: %s, children %d\n", 
+                printf("%*ctoken: %s, value: %s, type: %s, children %d\n", 
                     2*depth, ' ', tok, node.value.s, type, node.num_children
                 );
             break;
@@ -352,15 +371,16 @@ void print_node(ast_node_t node, int depth, void *arg)
         case TYPE:
         case VARIABLE:
             type_to_str(type, node.type);
-            printf("%*ctype: %s, var type: %s, children %d\n", 2*depth, ' ', tok, type, node.num_children);
+            printf("%*ctoken: %s, var type: %s, children %d\n", 2*depth, ' ', tok, type, node.num_children);
             break;
         //sepcial case node with op type as value
         case BINARY_OP:
             tok_to_str(type, node.value.i);
-            printf("%*ctype: %s, op: %s, children %d\n", 2*depth, ' ', tok, type, node.num_children);
+            printf("%*ctoken: %s, op: %s, children %d\n", 2*depth, ' ', tok, type, node.num_children);
             break;
         default:
-            printf("%*ctype: %s, children %d\n", 2*depth, ' ', tok, node.num_children);
+            type_to_str(type, node.type);
+            printf("%*ctoken: %s, type: %s, children %d\n", 2*depth, ' ', tok, type, node.num_children);
             break;
     }
 }

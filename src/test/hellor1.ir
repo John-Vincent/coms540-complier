@@ -1,0 +1,55 @@
+
+;
+; This program prints "Hello, world!"
+; by repeatedly calling function putchar.
+
+.CONSTANTS 0
+.GLOBALS 0
+
+.FUNCTIONS 1
+.FUNC 2 main
+  .params 0
+  .return 1
+  .locals 0
+    pushv 0x48  ; 'H'
+    call 1
+    popx        ; putchar returns an integer; discard it
+    pushv 0x65  ; 'e'
+    call 1
+    popx
+    pushv 0x6c  ; 'l'
+    call 1
+    call 1
+    popx
+    pushv 0x6f  ; 'o'
+    call 1
+    popx
+    pushv 0x2e  ; ','
+    call 1
+    popx
+    pushv 0x20  ; ' '
+    call 1
+    popx
+    pushv 0x77  ; 'w'
+    call 1
+    popx
+    pushv 0x6f  ; 'o'
+    call 1
+    popx
+    pushv 0x72  ; 'r'
+    call 1
+    popx
+    pushv 0x6c  ; 'l'
+    call 1
+    popx
+    pushv 0x64  ; 'd'
+    call 1
+    popx
+    pushv 0x21  ; '!'
+    call 1
+    popx
+    pushv 0x0a  ; '\n'
+    call 1
+    ret
+.end FUNC
+

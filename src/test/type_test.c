@@ -10,6 +10,11 @@ void g(int a)
     global_a = a;
 }
 
+int getchar()
+{
+
+}
+
 int main()
 {
     int a, b[4], c;

@@ -4,6 +4,7 @@
 #include "../../includes/main.h"
 #include "../../includes/lexer.h"
 #include "../../includes/parser.h"
+#include "../../includes/intermediate_generator.h"
 
 //characters needed ofr on the parse args function
 #define LEXER           'l'
@@ -14,6 +15,8 @@
 #define OPTION_FLAG     '-'
 
 static int parse_args(int argc, char** argv);
+
+static void free_memory(lexer_state_t *lexer, ast_node_t *parse_trees);
 
 //source files that need to be 'compiled'
 static char** file_list;
@@ -28,12 +31,12 @@ uint64_t program_options = INITIAL_OPTION;
  */ 
 int main(int argc, char** argv)
 {
-    int i;
+    int result;
     lexer_state_t *lexer = NULL;
     ast_node_t *parse_trees;
 
     //temp to meet assigment 1 specs
-    program_options = program_options | TYPE_OUTPUT_OPTION;
+    program_options = program_options | INTERMEDIATE_OUTPUT;
 
     file_list = (char**)malloc(sizeof(argc) * (argc-1));
 
@@ -59,15 +62,22 @@ int main(int argc, char** argv)
     //run parser
     if(program_options & PARSER_OPTION)
     {
-         parse_trees = parse_input(files, file_list);
-         if(parse_trees == NULL)
+        parse_trees = parse_input(files, file_list);
+        if(parse_trees == NULL)
+        {
+            free_memory(lexer, NULL);
             return -3;
+        }
     }
     //create intermediate code
-    if(program_options & INTERMEDIATE_OPTION)
+    if(program_options & INTERMEDIATE_OPTION && parse_trees)
     {
-        fprintf(stderr, "failed to generate intermediate code\n");
-        return -6;
+        result = generate_intermediate_code(parse_trees, files);
+        if(result)
+        {
+            fprintf(stderr, "failed to generate intermediate code\n");
+            return -6;
+        }
     }
     //compile to target code
     if(program_options & COMPILE_OPTION)
@@ -75,6 +85,15 @@ int main(int argc, char** argv)
         fprintf(stderr, "failed to compile input\n");
         return -7;
     }
+
+    free_memory(lexer, parse_trees);
+
+    return 0;
+}
+
+void free_memory(lexer_state_t *lexer, ast_node_t *parse_trees)
+{
+    int i;
 
     if(lexer)
     {
@@ -94,11 +113,8 @@ int main(int argc, char** argv)
         }
         free(parse_trees);
     }
-
     //clean up after file list
     free(file_list);
-
-    return 0;
 }
 
 static int parse_args(int argc, char** argv)

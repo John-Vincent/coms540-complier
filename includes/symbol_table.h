@@ -5,6 +5,10 @@
 
     typedef void *symbol_t;
 
+    int init_symbol_table();
+
+    int has_type_error();
+
     int global_scope_add(char* symbol, int type, char* file, int line, int* params);
 
     int local_scope_add(char* symbol, int type, char* file, int line);

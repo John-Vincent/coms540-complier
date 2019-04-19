@@ -24,7 +24,9 @@ C_CORE = $(addprefix core/, main hashmap utils)
 LEXER =  $(addprefix lexer/, c_lang.yy lexer)
 PARSER = $(addprefix parser/, c_parser.tab parser)
 TYPE = $(addprefix type_checker/, symbol_table)
-C_BINARIES = $(addprefix $(BIN)/, $(addsuffix .o, $(PARSER) $(C_CORE) $(LEXER) $(TYPE) ))
+CODE_GEN = $(addprefix code_gen/, intermediate_generator)
+C_BINARIES = $(addprefix $(BIN)/, $(addsuffix .o, $(PARSER) $(C_CORE) $(LEXER) $(TYPE) $(CODE_GEN) ))
+VM_BINARY = $(addprefix $(BIN)/, code_gen/stackvm.o)
 DOC_FILES = $(addprefix $(DBIN)/, $(addsuffix .pdf, developers))
 SYMBOL_TEST_FILES = $(addprefix src/, $(addprefix core/, utils.c hashmap.c) type_checker/symbol_table.c)
 
@@ -33,6 +35,9 @@ default: compile docs
 
 compile: $(BIN)/compile
 	@echo "made compile"
+
+vm: $(BIN)/vm
+	@echo "made vm"
 
 docs: $(DOC_FILES)
 	@echo "made documentation files"
@@ -77,6 +82,9 @@ $(DBIN)/%.pdf: $(DSRC)/%.tex | $$(@D)/.
 $(BIN)/compile: $(C_BINARIES) | $$(@D)/.
 	@echo "linking objects"
 	@$(CC) $(CFLAGS) $(C_BINARIES) $(CLIBS) -o $@
+
+$(BIN)/vm: $(VM_BINARY) | $$(@D)/.
+	@$(CC) $(CFLAGS) $(VM_BINARY) -o $@
 
 #standard c object rule
 $(BIN)/%.o: $(SRC)/%.c | $$(@D)/. 

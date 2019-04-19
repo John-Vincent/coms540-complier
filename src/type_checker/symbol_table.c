@@ -40,6 +40,29 @@ static symbol_table_t local_symbols = NULL;
 
 static int return_type = 0;
 
+static int error_in_types = 0;
+
+static char* BUILT_IN_FUNC= "built in";
+
+int init_symbol_table()
+{
+    int i, params[2];
+    params[0]  = DEF_TYPE;
+    i = global_scope_add("getchar", INT, BUILT_IN_FUNC, 0, params);
+    if(i == 0)
+    {
+        params[0] = INT;
+        params[1] = DEF_TYPE;
+        i = global_scope_add("putchar", INT, BUILT_IN_FUNC, 0, params);
+    }
+    return i;
+}
+
+int has_type_error()
+{
+    return error_in_types;
+}
+
 int global_scope_add(char* symbol, int type, char* file, int line, int* params)
 {
     if(!(program_options & TYPE_OPTION))
@@ -238,6 +261,7 @@ int resolve_bop_type(int op, int type1, int type2)
     fprintf(stderr, "Error in %s line %d:\n\tOperation not supported \"%s %s %s\"\n",
         parse_file_string, yyline, t1, op_str, t2
     );
+    error_in_types = 1;
 
     return ERROR;
 }
@@ -287,6 +311,7 @@ int resolve_uop_type(int op, int type)
     fprintf(stderr, "Error in %s line %d:\n\tUnary Operator \"%s\" cannot be applied to type %s\n",
         parse_file_string, yyline, op_str, t 
     );
+    error_in_types = 1;
 
     return ERROR;
 }
@@ -325,6 +350,8 @@ int resolve_turnary_type(int t1, int t2, int t3)
     fprintf(stderr, "Error in %s line %d:\n\tTurnary not supported with types \"%s ? %s : %s\"\n",
         parse_file_string, yyline, c1, c2, c3
     );
+    error_in_types = 1;
+
     return ERROR;
 }
 
@@ -366,7 +393,7 @@ int match_params(char *symbol, int *params, int length)
             else
             {
                 //move to next test if there is a mismatch
-                if(type_coerce(sym->params[i], params[j] == ERROR))
+                if(type_coerce(sym->params[i], params[j]) == ERROR)
                     break;
                 i++;
             }
@@ -377,9 +404,15 @@ int match_params(char *symbol, int *params, int length)
     }
 
     if(matches > 1)
+    {
+        error_in_types = 1;
         fprintf(stderr, "Error in file %s line %d:\n\tambiguous function call multiple defintions match argument types\n", parse_file_string, yyline);
+    }
     else if(matches == 0)
+    {
+        error_in_types = 1;
         fprintf(stderr, "Error in file %s line %d:\n\tno definition for function matches argument types\n", parse_file_string, yyline);
+    }
     else
         return 0;
     return -1;
@@ -402,10 +435,13 @@ void check_return_type(int type)
     type_to_str(t1, return_type);
     type_to_str(t2, type);
 
-    if( (type & TYPE_MASK) != (return_type & TYPE_MASK) )
-        fprintf(stderr, "Error in %s line %d:\n\treturn type: %s, does not match function return type of %s",
+    if( type_coerce(return_type, type) == ERROR )
+    {
+        error_in_types = 1;
+        fprintf(stderr, "Error in %s line %d:\n\treturn type: %s cannot be coerced into function return type of %s",
             parse_file_string, yyline, t1, t2
         ); 
+    }
 }
 
 void print_expression_type(int type)
@@ -423,6 +459,7 @@ static void print_type_error(char* cur_file, char* old_file, char* symbol, int t
     char temp[20];
 
     type_to_str(temp, type);
+    error_in_types = 1;
     fprintf(stderr, "Error in %s line %d:\n\tlocal variable %s already declared as:\n\t  %s %s (near line %d in file %s)\n",
          cur_file, new_line, symbol, temp, symbol, 
          old_line, old_file 
@@ -448,6 +485,7 @@ static symbol_imp_t *create_symbol(char *symbol, int type, int line, char *file,
         length++;
         
         sym->params = malloc(sizeof(int) * length);
+        sym->num_params = length;
 
         for(i = 0; i < length; i++)
             sym->params[i] = params[i];
@@ -456,7 +494,7 @@ static symbol_imp_t *create_symbol(char *symbol, int type, int line, char *file,
     {
         sym->params = NULL;
     }
-
+    
     sym->symbol = symbol;
     sym->type = type;
     sym->line = line;

@@ -1,0 +1,36 @@
+
+;
+; This program prints "Hello, world!"
+; by looping over a character array.
+
+.CONSTANTS 4
+  0x6c6c6548  ; lleH  (reverse order)
+  0x77202e6f  ; w ,o
+  0x646c726f  ; dlro
+  0x00000a21  ; \0\0\n!
+
+.GLOBALS 0
+
+.FUNCTIONS 1
+.FUNC 2 main
+  .params 0
+  .return 1
+  .locals 1
+    pushv 0x00
+    pop L0    ; i=0
+  I1:
+    push L0
+    ptrto C0
+    pushc[]   ; ptr[i]
+    copy
+    ==0c I0   ; end when 0==ptr[i]
+    call 1    ; print character
+    popx      ; ignore return value
+    push L0   ; i++ 
+    ++i
+    pop L0
+    goto I1
+  I0:
+    ret
+.end FUNC
+
