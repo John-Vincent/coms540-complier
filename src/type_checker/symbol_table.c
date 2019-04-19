@@ -253,6 +253,10 @@ int resolve_bop_type(int op, int type1, int type2)
             if(ans != ERROR)
                 return ans;
             break;
+        case '[':
+            if(type1 & ARRAY && type_coerce(INT, type2))
+                return type1 ^ ARRAY;
+            break;
     }
         
     tok_to_str(op_str, op);

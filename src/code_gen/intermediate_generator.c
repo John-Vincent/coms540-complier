@@ -6,6 +6,7 @@
 #include "../../includes/intermediate_generator.h"
 #include "../../includes/types.h"
 #include "../../includes/main.h"
+#include "../../includes/utils.h"
 #define FUNC_OFFSET 2
 
 static int generate_constants(ast_node_t *parse_trees, int num_trees, map_t map);
@@ -17,6 +18,8 @@ static int generate_functions(ast_node_t *parse_tree, int num_trees, map_t map);
 static int generate_function_code(ast_node_t func, map_t map);
 
 static int generate_statement_code(ast_node_t func, map_t global, map_t local);
+
+static void generate_binary_op_code(char op, int op_type);
 
 static int count_slots(ast_node_t base, char prepend, int vars, map_t map);
 
@@ -135,7 +138,65 @@ static int generate_function_code(ast_node_t func, map_t map)
 
 static int generate_statement_code(ast_node_t func, map_t global, map_t local)
 {
+    char token[20];
+    tok_to_str(token, func.token);
 
+    printf(";%s on line %d\n", token, func.line_number);
+
+    switch(func.token)
+    {
+        case '=':
+
+            break;
+        case RETURN:
+            break;
+        case BINARY_OP:
+            generate_statement_code(func.children[0], global, local);
+            generate_statement_code(func.children[1], global, local);
+            generate_binary_op_code(func.value.c, func.type);
+            break;
+        case FUNCTION_CALL:
+            break;
+        case IF:
+        case FOR:
+        case WHILE:
+        case DO:
+        case CONTINUE:
+        case BREAK:
+        case ELSE:
+        case TURNARY:
+            fprintf(stderr, "branching statement on line %d not yet supported\n", func.line_number);
+            break;
+        default:
+            fprintf(stderr, "collin you forgot to write a case for %s you idiot\n", token);
+            return -1;
+    }
+
+    return 0;
+}
+
+static void generate_binary_op_code(char op, int op_type)
+{
+    char code;
+    switch(op_type)
+    {
+        case INT:
+            code = 'i';
+            break;
+        case CHAR:
+            code = 'c';
+            break;
+        case FLOAT:
+            code = 'f';
+    }
+    switch(op)
+    {
+        case '+':
+        case '-':
+        case '%':
+            printf("%c%c\n", op, code);
+            break;
+    }
 }
 
 static int count_slots(ast_node_t base, char prepend, int vars, map_t map)
