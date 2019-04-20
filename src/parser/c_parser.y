@@ -36,7 +36,7 @@ extern char* parse_file_string;
 %type<a> statements if else do while for expression expressions constant optional_expression func_type_name
 %type<a> function_proto function_def type_name param_list params statement_list variables variable_list
 %type<a> function_sig
-%type<v> assignment binary unary 
+%type<v> assignment unary 
 %type<v> SCOPE TYPE IDENT INTCONST STRCONST CHARCONST REALCONST
 
 %nonassoc NOELSE
@@ -214,9 +214,79 @@ expression: constant
         {$$ = new_ast_node(DECR, $1->type, 1, $1, yyempty_value, 0);}
     | unary expression %prec UNARY
         {$$ = new_ast_node($1.i, resolve_uop_type($1.i, $2->type), 1, $2, yyempty_value, 0);}
-    | expression binary expression %prec EQUALITY
+    | expression EQUAL expression %prec EQUALITY
         {
-            $$ = new_ast_node(BINARY_OP, resolve_bop_type($2.i, $1->type, $3->type), 1, $1, $2, 0);
+            $$ = new_ast_node(BINARY_OP, resolve_bop_type(EQUAL, $1->type, $3->type), 1, $1, (ast_value_t)EQUAL, 0);
+            add_ast_children($$, $3, 1);
+        }
+    | expression NEQUAL expression %prec EQUALITY
+        {
+            $$ = new_ast_node(BINARY_OP, resolve_bop_type(NEQUAL, $1->type, $3->type), 1, $1, (ast_value_t)NEQUAL, 0);
+            add_ast_children($$, $3, 1);
+        }
+    | expression '>' expression %prec INEQUALITY
+        {
+            $$ = new_ast_node(BINARY_OP, resolve_bop_type('>', $1->type, $3->type), 1, $1, (ast_value_t)'>', 0);
+            add_ast_children($$, $3, 1);
+        }
+    | expression GE expression %prec INEQUALITY
+        {
+            $$ = new_ast_node(BINARY_OP, resolve_bop_type(GE, $1->type, $3->type), 1, $1, (ast_value_t)GE, 0);
+            add_ast_children($$, $3, 1);
+        }
+    | expression '<' expression %prec INEQUALITY
+        {
+            $$ = new_ast_node(BINARY_OP, resolve_bop_type('<', $1->type, $3->type), 1, $1, (ast_value_t)'<', 0);
+            add_ast_children($$, $3, 1);
+        }
+    | expression LE expression %prec INEQUALITY
+        {
+            $$ = new_ast_node(BINARY_OP, resolve_bop_type(LE, $1->type, $3->type), 1, $1, (ast_value_t)LE, 0);
+            add_ast_children($$, $3, 1);
+        }
+    | expression '+' expression %prec '+'
+        {
+            $$ = new_ast_node(BINARY_OP, resolve_bop_type('+', $1->type, $3->type), 1, $1, (ast_value_t)'+', 0);
+            add_ast_children($$, $3, 1);
+        }
+    | expression '-' expression %prec '-'
+        {
+            $$ = new_ast_node(BINARY_OP, resolve_bop_type('-', $1->type, $3->type), 1, $1, (ast_value_t)'-', 0);
+            add_ast_children($$, $3, 1);
+        }
+    | expression '*' expression %prec '*'
+        {
+            $$ = new_ast_node(BINARY_OP, resolve_bop_type('*', $1->type, $3->type), 1, $1, (ast_value_t)'*', 0);
+            add_ast_children($$, $3, 1);
+        }
+    | expression '/' expression %prec '/'
+        {
+            $$ = new_ast_node(BINARY_OP, resolve_bop_type('/', $1->type, $3->type), 1, $1, (ast_value_t)'/', 0);
+            add_ast_children($$, $3, 1);
+        }
+    | expression '%' expression %prec '%'
+        {
+            $$ = new_ast_node(BINARY_OP, resolve_bop_type('%', $1->type, $3->type), 1, $1, (ast_value_t)'%', 0);
+            add_ast_children($$, $3, 1);
+        }
+    | expression '|' expression %prec '|'
+        {
+            $$ = new_ast_node(BINARY_OP, resolve_bop_type('|', $1->type, $3->type), 1, $1, (ast_value_t)'|', 0);
+            add_ast_children($$, $3, 1);
+        }
+    | expression '&' expression %prec '&'
+        {
+            $$ = new_ast_node(BINARY_OP, resolve_bop_type('&', $1->type, $3->type), 1, $1, (ast_value_t)'&', 0);
+            add_ast_children($$, $3, 1);
+        }
+    | expression DPIPE expression %prec DPIPE
+        {
+            $$ = new_ast_node(BINARY_OP, resolve_bop_type(DPIPE, $1->type, $3->type), 1, $1, (ast_value_t)DPIPE, 0);
+            add_ast_children($$, $3, 1);
+        }
+    | expression DAMP expression %prec DAMP
+        {
+            $$ = new_ast_node(BINARY_OP, resolve_bop_type(DAMP, $1->type, $3->type), 1, $1, (ast_value_t)DAMP, 0);
             add_ast_children($$, $3, 1);
         }
     | expression '?' expression ':' expression 
@@ -242,38 +312,6 @@ unary: '-'
         { $$.i = '!' ; }
     | '~'
         { $$.i = '~'; }
-    ;
-
-binary: EQUAL %prec EQUALITY
-        { $$.i = EQUAL; }
-    | NEQUAL %prec EQUALITY
-        { $$.i = NEQUAL; }
-    | '>' %prec INEQUALITY
-        { $$.i = '>'; } 
-    | GE %prec INEQUALITY
-        { $$.i = GE; }
-    | '<' %prec INEQUALITY
-        { $$.i = '<'; }
-    | LE %prec INEQUALITY
-        { $$.i = LE; }
-    | '+' %prec '+'
-        { $$.i = '+'; }
-    | '-' %prec '-'
-        { $$.i = '-'; }
-    | '*' %prec '*'
-        { $$.i = '*'; }
-    | '/' %prec '/'
-        { $$.i = '/'; }
-    | '%' %prec '%'
-        { $$.i = '%'; }
-    | '|' %prec '|'
-        { $$.i = '|'; }
-    | '&' %prec '&'
-        { $$.i = '&'; }
-    | DPIPE %prec DPIPE
-        { $$.i = DPIPE; }
-    | DAMP %prec DAMP
-        { $$.i = DAMP; }
     ;
 
 assignment: '='

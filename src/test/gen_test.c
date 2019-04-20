@@ -35,6 +35,10 @@ int main()
 void memes(int i, char asdf, float f[5])
 {
     char c[20], v;
+    int k;
 
-    c[5] = 'c';
+    c[k+10] = 'c';
+    k = -5;
+    "hello";
+    k++;
 }

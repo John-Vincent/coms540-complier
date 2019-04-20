@@ -43,8 +43,9 @@
     \clearpage
 
     \section{Introduction}
-        This assignment took me a super long time and i wa in chicago still working on it, So i just slapped the last portions of it
-        together.
+        just traversed my ast to generate code. I used goto expression to allow the comparison instructions
+        to evaluate to 0 or 1 like c does. also used hashmaps to store the mapping from variable name
+        to slot location.
 
     \section{Main}
         The main file in this program interprets the command line arguments, sets the runtime options in a global variable called 
@@ -238,6 +239,74 @@
         I use multiple hashmaps to keep track of all the global and locally scoped symbols.
         I have a bunch of functions that the parser can call to do basic type checking with the
         symbol table.
+
+    \section{Intermediate Generator}
+        This file is in charge of generating all of the code. I call it the intermediate generator,
+        but really I am just using my AST as the intermediate code. This file just makes a 3 full
+        tree traversals with a few other partial tree traversals to generate all the code in order.
+        I use 3 hashmaps to map constants, global variables, and local variables to addresses in 
+        the vm. The local hashmap is created then destroyed during the call to the 
+        generate\_function\_code function since it only has relevence inside the context of a function.
+
+        \subsection{generate\_intermediate\_code}
+            generates the code based on the asts passed in
+
+        \subsection{generate\_constants}
+            makes 1 pass throught the whole ast counting slots
+            needed to store all string constants. Then a second
+            pass through to generate the constant values.
+
+        \subsection{print\_constant\_traversal}
+            scans the whole ast and prints the constant information 
+            for all string constants
+
+        \subsection{count\_constant\_traversal}
+            scans whole ast and counts the number of slots
+            for string constants we will need
+
+        \subsection{generate\_globals}
+            counts the number of global slots needed and then writes the 
+            instruction to reserve those slots.
+
+        \subsection{generate\_functions}
+            counts the number of functions, writes the instruction to declair number
+            of functions. then generates the function code for each function definition
+
+        \subsection{generate\_function\_code}
+            is used by generate\_functions to actually generate the code for each function
+            counts the number of functions, writes the instruction to declair number
+            of functions. then generates the function code for each function definition
+
+        \subsection{generate\_statement\_code}
+            is used by generate\_function\_code to generate code for specific statements 
+            in the function body
+
+        \subsection{generate\_binary\_op\_code}
+            generates the code for binary operations
+
+        \subsection{count\_slots}
+            counts the number of slots needed by parameters, arguments or 
+            local variables based on the root node supplied as base.
+            while doing this it also adds the variables to the hashmap supplied
+            as the last argument with the address code constructed from
+            prepending the character argument with the integer argument.
+            the integer argument is the starting point for the slot counter.
+            returns the number of slots counted
+
+        \subsection{generate\_label}
+            continually makes new labels to be used by other functions
+
+        \subsection{get\_address}
+            searches the given maps (can be null) for the key passed
+            and returns the value associated with that key
+
+        \subsection{get\_type\_char}
+            many instructions require a character to identify the type
+            its operating on, this converst by type variables to the 
+            appropriate character
+
+        \subsection{clear\_map}
+            function used to free all map memory
 
     \section{Hashmap}
         I pulled this hashmap from a project on git at \url{https://github.com/petewarden/c\_hashmap}.
