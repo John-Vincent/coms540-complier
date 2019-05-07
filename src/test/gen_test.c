@@ -14,6 +14,7 @@ int main()
     coerce types from int to char or char to int.
     */
     char d1, d2, sum;
+    int i;
     d1 = (char) getchar() - '0';
     d2 = (char) getchar() - '0';
     sum = d1 + d2;
@@ -29,7 +30,10 @@ int main()
     putchar((int)(sum / 10 + '0'));
     putchar((int)(sum % 10 + '0'));
     putchar((int)'\n');
-    return sum; /* The stack VM will show the value returned by main() */
+    while(i < 5)
+        i++;
+    i ? i++ : i--;
+    return i; /* The stack VM will show the value returned by main() */
 }
 
 void memes(int i, char asdf, float f[5])
@@ -40,5 +44,32 @@ void memes(int i, char asdf, float f[5])
     c[k+10] = 'c';
     k = -5;
     "hello";
+    v = k == 'c';
+    if( v == v || v == k  && k == v || k == v )
+    {
+        k=2;
+    }
+    else
+    {
+        k=3;
+    }
+
+    for(k = 0; k < 5; k++)
+    {
+        v++;
+    }
+    
+    k=0;
+    do
+    {
+        k++;
+    }while(k<5);
+
+    if( v == v)
+        return;
+    else if (v==k)
+        return;
+    else
+        return;
     k++;
 }

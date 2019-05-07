@@ -43,9 +43,12 @@
     \clearpage
 
     \section{Introduction}
-        just traversed my ast to generate code. I used goto expression to allow the comparison instructions
-        to evaluate to 0 or 1 like c does. also used hashmaps to store the mapping from variable name
-        to slot location.
+        Branching code is now done for the code generation. Short circuiting should be working, and goto statements
+        should be minimized by allowing for inversion of comparators to create easy fallthrough scenarios.
+        A few changes to the paramaters of the code generating functions had to be made to allow for this, as well
+        as for tracking labels for continue and break statements. My label system was based on property inheritance
+        as labels are made as my code steps down through the abstract syntax tree, and are passed as arguments
+        allowing me to not have to allocate dynamic memory for label values.
 
     \section{Main}
         The main file in this program interprets the command line arguments, sets the runtime options in a global variable called 
@@ -240,7 +243,7 @@
         I have a bunch of functions that the parser can call to do basic type checking with the
         symbol table.
 
-    \section{Intermediate Generator}
+    \section{Intermediate/Code Generator}
         This file is in charge of generating all of the code. I call it the intermediate generator,
         but really I am just using my AST as the intermediate code. This file just makes a 3 full
         tree traversals with a few other partial tree traversals to generate all the code in order.
@@ -279,10 +282,29 @@
 
         \subsection{generate\_statement\_code}
             is used by generate\_function\_code to generate code for specific statements 
-            in the function body
+            in the function body. This section was updated to incldue 3 new parameters
+            2 for label values and one flag for if we generating branch control code.
+            If we are not generating branch control code then the labels are for the
+            "start" of the current loop if we are in a loop and next code past the
+            loop so we can make use of continue and break. If we are generate branch
+            control code then the labels are for the locations to go to on true and
+            false evaluations
+
+        \subsection{generate\_branching\_code}
+            This functin is used to generate code for statements that involve branching.
+            it has the same arguments as generate\_statement\_code and is called by
+            that function. This is really just for me to partition the new logic for branching into
+            one location. It also has a few more local variables for storing label strings that
+            are needed for the branching logic. This code is responsible for printing the labels
+            in the location that they are needed, as well as providing the new label and flag 
+            parameters to subsequent calls to generate\_statement\_code to create the proper jumping 
+            logic.
 
         \subsection{generate\_binary\_op\_code}
-            generates the code for binary operations
+            generates the code for binary operations. If the code is a comparison for branching controls
+            then the comparison will be inverted in the case that there is a false jump location
+            and not a true jump location eliminating a goto by allowing the true condition to fall
+            through and only a jump if the false condition is met.
 
         \subsection{count\_slots}
             counts the number of slots needed by parameters, arguments or 
@@ -293,6 +315,20 @@
             the integer argument is the starting point for the slot counter.
             returns the number of slots counted
 
+        \subsection{invert\_operation}
+            This function takes a comparision operation and fills a supplied character 
+            buffer with the opposite operation allowing me to flip comparisions
+            for optimization reasons.
+
+        \subsection{need\_comparison}
+            This function is used when branching code is generated. The 
+            ast node in the branch control section of code is passed to this
+            function and it returns 0 when the following code will generate
+            its own jump statements and 1 when the code generate from the
+            expression will just place a value on the stack. This allows 
+            the branch generation section of code to add its own 0 comparison
+            to create the needed jumps.
+    
         \subsection{generate\_label}
             continually makes new labels to be used by other functions
 

@@ -1,0 +1,66 @@
+.CONSTANTS 0
+.GLOBALS 0
+.FUNCTIONS 1
+
+.FUNC 2 main
+    .params 0
+    .return 1
+    .locals 3
+    call 0 ; int getchar()
+    pushv 0xFF
+    &
+    pushv 0x30
+    -c
+    copy
+    pop L0 ; d1
+    popx
+    call 0 
+    pushv 0xFF
+    &
+    pushv 0x30
+    -c
+    copy
+    pop L1
+    popx
+    push L0
+    push L1
+    +c
+    copy
+    pop L2
+    popx
+    push L0
+    pushv 0x30
+    +c
+    call 1
+    popx
+    pushv 0x2b
+    call 1
+    popx
+    push L1
+    pushv 0x30
+    +c
+    call 1
+    popx
+    pushv 0x3d
+    call 1
+    popx
+    push L2
+    pushv 0xa
+    /i
+    pushv 0x30
+    +i
+    call 1
+    popx
+    push L2
+    pushv 0xa
+    %i
+    pushv 0x30
+    +i
+    call 1
+    popx
+    pushv 0xa
+    call 1
+    popx
+    push L2 ; sum
+    ret
+.end FUNC

@@ -4,11 +4,11 @@
 #include <assert.h>
 #include <string.h>
 
-// #define DEBUG_PARSER
-// #define DEBUG_LABELS
-// #define SHOW_PROGRAM
-// #define SHOW_EXECUTION
-// #define SHOW_STACK
+//#define DEBUG_PARSER
+//#define DEBUG_LABELS
+//#define SHOW_PROGRAM
+//#define SHOW_EXECUTION
+//#define SHOW_STACK
 
 void runtimeError(const char* e);
 

@@ -80,11 +80,11 @@ int main(int argc, char** argv)
         }
     }
     //compile to target code
-    if(program_options & COMPILE_OPTION)
-    {
-        fprintf(stderr, "failed to compile input\n");
-        return -7;
-    }
+    //if(program_options & COMPILE_OPTION)
+    //{
+    //    fprintf(stderr, "failed to compile input\n");
+    //    return -7;
+    //}
 
     free_memory(lexer, parse_trees);
 
@@ -119,7 +119,7 @@ void free_memory(lexer_state_t *lexer, ast_node_t *parse_trees)
 
 static int parse_args(int argc, char** argv)
 {
-    int i, main_option_set = 0;
+    int i, main_option_set = 0, first = 1;
     char cur;
 
     for(i = 1; i < argc; i++)
@@ -136,10 +136,25 @@ static int parse_args(int argc, char** argv)
                 case COMPILE:
                     program_options = program_options | COMPILE_OPTION;
                 case INTERMEDIATE:
+                    if(first)
+                    {
+                        first = 0;
+                        program_options = program_options | INTERMEDIATE_OUTPUT;
+                    }
                     program_options = program_options | INTERMEDIATE_OPTION;
                 case TYPE:
+                    if(first)
+                    {
+                        first = 0;
+                        program_options = program_options | TYPE_OUTPUT_OPTION;
+                    }
                     program_options = program_options | TYPE_OPTION;
                 case PARSER:
+                    if(first)
+                    {
+                        first = 0;
+                        program_options = program_options | PARSER_OUTPUT_OPTION;
+                    }
                     program_options = program_options | PARSER_OPTION;
                     if(main_option_set)
                     {

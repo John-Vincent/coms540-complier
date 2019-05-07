@@ -291,6 +291,12 @@ void tok_to_str(char* buff, int token)
         case FUNCTION_CALL:
             strcpy(buff, "FUNCTION_CALL");
             break;
+        case ZEQUAL:
+            strcpy(buff, "==0");
+            break;
+        case ZNEQUAL:
+            strcpy(buff, "!=0");
+            break;
         default:
             sprintf(buff, "%d", token); 
     }

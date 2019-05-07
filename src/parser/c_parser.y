@@ -30,7 +30,7 @@ extern char* parse_file_string;
 %token EQUAL NEQUAL GE LE FUNCTION EXPRESSION_LIST BINARY_OP UNARY_OP FUNCTION_DEF
 %token DAMP DPIPE PLUSASSIGN MINUSASSIGN CAST PROGRAM END_NODE_LIST FUNCTION_PROTO
 %token STARASSIGN SLASHASSIGN INCR DECR UNKNOWN REALCONST IFNDEF IFDEF TYPE_NAME VARIABLE_LIST
-%token ENDIF ELIF ELSE_DIREC HEXCONST UNDEF SCOPE LVALUE EMPTY PARAM_LIST STATEMENT
+%token ENDIF ELIF ELSE_DIREC HEXCONST UNDEF SCOPE LVALUE EMPTY PARAM_LIST STATEMENT ZEQUAL ZNEQUAL
 
 %type<a> program variable statement identifiers identifier statement_block l_value program_statement
 %type<a> statements if else do while for expression expressions constant optional_expression func_type_name

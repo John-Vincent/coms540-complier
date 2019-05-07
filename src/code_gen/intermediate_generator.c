@@ -49,12 +49,19 @@ static int generate_function_code(ast_node_t func, map_t map);
  *  is used by generate_function_code to generate code for specific statements 
  *  in the function body
  */
-static int generate_statement_code(ast_node_t func, map_t global, map_t local);
+static int generate_statement_code(ast_node_t func, map_t global, map_t local, char *into, char *around, int test);
+
+/**
+ *  this function is used to generate instructions for code that requires
+ *  branching. Mainly used split code into logical chunks and splitting 
+ *  functionality for different run options.
+ */
+static int generate_branching_code(ast_node_t func, map_t global, map_t local, char *into, char *around, int test);
 
 /**
  *  generates the code for binary operations
  */
-static void generate_binary_op_code(int op, int op_type);
+static void generate_binary_op_code(int op, int op_type, char *into, char *around, int test);
 
 /**
  *  counts the number of slots needed by parameters, arguments or 
@@ -68,9 +75,24 @@ static void generate_binary_op_code(int op, int op_type);
 static int count_slots(ast_node_t base, char prepend, int vars, map_t map);
 
 /**
+ *  this function takes a character buffer and stores the comparision
+ *  operation that is the opposite of the supplied operation
+ */
+static void invert_operation(char *type, int op);
+
+/**
+ *  This function is called by generate_branching_code
+ *  and returns true when the expression in a loop control 
+ *  segment does not generate code with jumps. That way the
+ *  branching code can then compare the value placed on the stack
+ *  by the expression to 0 to get its jump.
+ */
+static int need_comparison(ast_node_t token);
+
+/**
  *  continually makes new labels to be used by other functions
  */
-static void generate_label();
+static void generate_label(char *label);
 
 /**
  *  searches the given maps (can be null) for the key passed
@@ -268,7 +290,8 @@ static int generate_function_code(ast_node_t func, map_t map)
 
     for(i = 0; i < func.children[3].num_children; i++)
     {
-        generate_statement_code(func.children[3].children[i], map, local_map);
+        if(generate_statement_code(func.children[3].children[i], map, local_map, NULL, NULL, 0))
+            printf("    popx\n");
     }
 
     hashmap_iterate(local_map, &clear_map, NULL);
@@ -276,7 +299,7 @@ static int generate_function_code(ast_node_t func, map_t map)
     return 0;
 }
 
-static int generate_statement_code(ast_node_t cur, map_t global, map_t local)
+static int generate_statement_code(ast_node_t cur, map_t global, map_t local, char *into, char *around, int test)
 {
     char token[20], *address=NULL, t;
     tok_to_str(token, cur.token);
@@ -291,39 +314,46 @@ static int generate_statement_code(ast_node_t cur, map_t global, map_t local)
             if(cur.children[0].num_children)
             {
                 t = get_type_char(cur.children[0].type);
-                generate_statement_code(cur.children[0].children[0], global, local);
+                generate_statement_code(cur.children[0].children[0], global, local, into, around, 0);
                 printf("    ptrto %s\n", address);
-                generate_statement_code(cur.children[1], global, local);
-                printf("    pop%c[]\n", t);
+                generate_statement_code(cur.children[1], global, local, into, around, test);
+                printf("    copy\n    pop%c[]\n", t);
             }
             else
             {
-                generate_statement_code(cur.children[1], global, local);
-                printf("    pop %s\n", address);
+                generate_statement_code(cur.children[1], global, local, into, around, 0);
+                printf("    copy\n    pop %s\n", address);
             }
             break;
         case RETURN:
             if(cur.num_children)
             {
-                generate_statement_code(cur.children[0], global, local);
-                printf("    ret\n");
+                generate_statement_code(cur.children[0], global, local, into, around, 0);
             }
+                printf("    ret\n");
             break;
         case BINARY_OP:
-            generate_statement_code(cur.children[0], global, local);
-            generate_statement_code(cur.children[1], global, local);
-            generate_binary_op_code(cur.value.i, cur.type);
+            if(cur.value.i == DAMP || cur.value.i == DPIPE)
+            {
+                generate_branching_code(cur, global, local, into, around, test);
+            }
+            else
+            {
+                generate_statement_code(cur.children[0], global, local, into, around, test);
+                generate_statement_code(cur.children[1], global, local, into, around, test);
+                generate_binary_op_code(cur.value.i, cur.type, into, around, test);
+            }
             break;
         case FUNCTION_CALL:
             address = get_address(global, NULL, cur.value.s);
             for(i=0; cur.num_children && i<cur.children[0].num_children; i++)
             {
-                generate_statement_code(cur.children[0].children[i], global,local);
+                generate_statement_code(cur.children[0].children[i], global,local, into, around, 0);
             }
             printf("    call %s\n", address);
             break;
         case CAST:
-            generate_statement_code(cur.children[0], global, local);
+            generate_statement_code(cur.children[0], global, local, into, around, test);
             switch(cur.type)
             {
                 case INT:
@@ -333,7 +363,7 @@ static int generate_statement_code(ast_node_t cur, map_t global, map_t local)
                 case CHAR:
                     if(cur.children[0].type == FLOAT)
                         printf("    convif\n");
-                    printf("    pushv 0x7\n    &\n");
+                    printf("    pushv 0xFF\n    &\n");
                     break;
                 case FLOAT:
                     if(cur.children[0].type != FLOAT)
@@ -342,18 +372,54 @@ static int generate_statement_code(ast_node_t cur, map_t global, map_t local)
             break;
         case '-':
             t = get_type_char(cur.children[0].type);
-            generate_statement_code(cur.children[0], global, local);
+            generate_statement_code(cur.children[0], global, local, into, around, 0);
             printf("    neg%c\n", t);
             break;
         case INCR:
-            generate_statement_code(cur.children[0], global, local);
             t = get_type_char(cur.type);
-            printf("    ++%c\n", t);
+            //array
+            if(cur.children[0].token == LVALUE && cur.children[0].num_children)
+            {
+                address = get_address(local, global, cur.children[0].value.s);
+                generate_statement_code(cur.children[0].children[0], global, local, into, around, 0);
+                printf("    ptrto %s\n", address);
+                generate_statement_code(cur.children[0], global, local, into, around, 0);
+                printf("    ++%c\n    copy\n    pop%c[]\n", t, t);
+            }
+            else if( cur.children[0].token == LVALUE)
+            {
+                address = get_address(local, global, cur.children[0].value.s);
+                generate_statement_code(cur.children[0], global, local, into, around, 0);
+                printf("    ++%c\n    copy\n    pop %s\n", t, address);
+            }
+            else
+            {
+                generate_statement_code(cur.children[0], global, local, into, around, 0);
+                printf("    ++%c\n", t);
+            }
             break;
         case DECR:
-            generate_statement_code(cur.children[0], global, local);
             t = get_type_char(cur.type);
-            printf("    --%c\n", t);
+            //array
+            if(cur.children[0].token == LVALUE && cur.children[0].num_children)
+            {
+                address = get_address(local, global, cur.children[0].value.s);
+                generate_statement_code(cur.children[0].children[0], global, local, into, around, 0);
+                printf("    ptrto %s\n", address);
+                generate_statement_code(cur.children[0], global, local, into, around, 0);
+                printf("    --%c\n    copy\n    pop%c[]\n", t, t);
+            }
+            else if (cur.children[0].token == LVALUE) 
+            {
+                address = get_address(local, global, cur.children[0].value.s);
+                generate_statement_code(cur.children[0], global, local, into, around, 0);
+                printf("    --%c\n    copy\n    pop %s\n", t, address);
+            }
+            else
+            {
+                generate_statement_code(cur.children[0], global, local, into, around, 0);
+                printf("    --%c\n", t);
+            }
             break;
         case IF:
         case FOR:
@@ -363,7 +429,15 @@ static int generate_statement_code(ast_node_t cur, map_t global, map_t local)
         case BREAK:
         case ELSE:
         case TURNARY:
-            fprintf(stderr, "branching statement on line %d not yet supported\n", cur.line_number);
+            //if this is the final option then run the new code else error
+            if(program_options & COMPILE_OPTION)
+            {
+                generate_branching_code(cur, global, local, into, around, test);
+            }
+            else
+            {
+                fprintf(stderr, "branching statement on line %d not yet supported\n", cur.line_number);
+            }
             break;
         case LVALUE:
             address = get_address(local, global, cur.value.s);
@@ -390,8 +464,224 @@ static int generate_statement_code(ast_node_t cur, map_t global, map_t local)
     return 0;
 }
 
+static int generate_branching_code(ast_node_t cur, map_t global, map_t local, char *into, char *around, int test)
+{
+    char label[20], label1[20], label2[20], token[20];
+    ast_node_t cur2;
+    tok_to_str(token, cur.token);
+    int i;
+    
+    switch(cur.token)
+    {
+        case IF:
+            generate_label(label);
+            generate_label(label1);
+            cur2 = cur.children[0];
+            generate_statement_code(cur2.children[0], global, local, label, label1, 1);
+            if(need_comparison(cur2.children[0]))
+                generate_binary_op_code(ZEQUAL, cur2.children[0].type, label1, label, 1);
+            printf("  %s:\n", label);
+            if(cur2.children[1].token == STATEMENT_BLOCK)
+            {
+                for(i = 0; i < cur2.children[1].num_children; i++)
+                {
+                    generate_statement_code(cur2.children[1].children[i], global, local, into, around, 0);
+                }
+            }
+            else
+            {
+                generate_statement_code(cur2.children[1], global, local, into, around, 0);
+            }
 
-static void generate_binary_op_code(int op, int op_type)
+            if(cur.num_children == 2)
+            {
+                generate_label(label);
+                printf("    goto %s\n  %s:\n", label, label1);
+                cur2 = cur.children[1];
+                if(cur2.children[0].token == STATEMENT_BLOCK)
+                {
+                    for(i = 0; i < cur2.children[0].num_children; i++)
+                    {
+                        generate_statement_code(cur2.children[0].children[i], global, local, into, around, 0);
+                    }
+                }
+                else
+                {
+                    generate_statement_code(cur2.children[0], global, local, into, around, 0);
+                }
+                printf("  %s:\n", label);
+            }
+            else
+            {
+                printf("  %s:\n", label);
+            }
+            break;
+        case FOR:
+            generate_label(label);
+            generate_label(label1);
+            generate_statement_code(cur.children[0], global, local, NULL, NULL, 0);
+            printf("  %s:\n", label);
+            generate_statement_code(cur.children[1], global, local, NULL, label1, 1);
+            if(need_comparison(cur.children[1]))
+                generate_binary_op_code(ZEQUAL, cur.children[1].type, label1, NULL, 1);
+            if(cur.children[3].token == STATEMENT_BLOCK)
+            {
+                for(i = 0; i < cur.children[3].num_children; i++)
+                {
+                    generate_statement_code(cur.children[3].children[i], global, local, label, label1, 0);
+                }
+            }
+            else
+            {
+                generate_statement_code(cur.children[3], global, local, label, label1, 0);
+            }
+            generate_statement_code(cur.children[2], global, local, label, label1, 0);
+            printf("    goto %s\n  %s:", label, label1);
+            break;
+        case WHILE:
+            generate_label(label);
+            generate_label(label1);
+            printf("  %s:\n", label);
+            generate_statement_code(cur.children[0], global, local, NULL, label1, 1);
+            if(need_comparison(cur.children[0]))
+                generate_binary_op_code(ZEQUAL, cur.children[0].type, label1, NULL, 1);
+            if(cur.children[1].token == STATEMENT_BLOCK)
+            {
+                for(i = 0; i < cur.children[1].num_children; i++)
+                {
+                    generate_statement_code(cur.children[1].children[i], global, local, label,  label1, 0);
+                }
+            }
+            else
+            {
+                generate_statement_code(cur.children[1], global, local, label, label1, 0);
+            }
+            printf("    goto %s\n  %s:\n", label, label1);
+            break;
+        case DO:
+            generate_label(label);
+            generate_label(label1);
+            generate_label(label2);
+            printf("  %s:\n", label);
+            if(cur.children[1].token == STATEMENT_BLOCK)
+            {
+                for(i = 0; i < cur.children[1].num_children; i++)
+                {
+                    generate_statement_code(cur.children[1].children[i], global, local, label2, label1, 0);
+                }
+            }
+            else
+            {
+                generate_statement_code(cur.children[1], global, local, label2, label1, 0);
+            }
+            printf("  %s:\n", label2);
+            generate_statement_code(cur.children[0], global, local, label, label1, 1);
+            if(need_comparison(cur.children[0]))
+                generate_binary_op_code(ZNEQUAL, cur.children[0].type, label, NULL, 1);
+            printf("  %s:\n", label1);
+            break;
+        case CONTINUE:
+            if(into)
+                printf("    goto %s\n", into);
+            break;
+        case BREAK:
+            if(around)
+                printf("    goto %s\n", around);
+            break;
+        case ELSE:
+            fprintf(stderr, "somehow i needed to process an ELSE by itself");
+            break;
+        case TURNARY:
+            generate_label(label);
+            generate_label(label1);
+            generate_statement_code(cur.children[0], global, local, NULL, label, 1);
+            if(need_comparison(cur.children[0]))
+                generate_binary_op_code(ZEQUAL, cur.children[0].type, label, NULL, 1);
+            generate_statement_code(cur.children[1], global, local, into, around, 0);
+            printf("    goto %s\n  %s:\n", label1, label);
+            generate_statement_code(cur.children[2], global, local, into, around, 0);
+            printf("  %s:\n", label1);
+            break;
+        case BINARY_OP:
+            if(cur.value.i == DAMP)
+            {
+                if(test && around)
+                {
+                    generate_statement_code(cur.children[0], global, local, NULL, around, 1);
+                    if(need_comparison(cur.children[0]))
+                        generate_binary_op_code(ZEQUAL, cur.children[0].type, around, NULL, 1);
+                    generate_statement_code(cur.children[1], global, local, into, around, 1);
+                    if(need_comparison(cur.children[1]))
+                        generate_binary_op_code(ZEQUAL, cur.children[1].type, around, into, 1);
+                }
+                else if(test && into)
+                {
+                    generate_label(label);
+                    generate_statement_code(cur.children[0], global, local, NULL, label, 1);
+                    if(need_comparison(cur.children[0]))
+                        generate_binary_op_code(ZEQUAL, cur.children[0].type, label, NULL, 1);
+                    generate_statement_code(cur.children[1], global, local, into, NULL, 1);
+                    if(need_comparison(cur.children[1]))
+                        generate_binary_op_code(ZEQUAL, cur.children[1].type, around, into, 1);
+                    printf("  %s:\n", label);
+                }
+                else
+                {
+                    generate_label(label);
+                    generate_label(label1);
+                    generate_statement_code(cur.children[0], global, local, NULL, label1, 1);
+                    if(need_comparison(cur.children[0]))
+                        generate_binary_op_code(ZEQUAL, cur.children[0].type,label1, NULL, 1);
+                    generate_statement_code(cur.children[1], global, local, NULL, label1, 1);
+                    if(need_comparison(cur.children[1]))
+                        generate_binary_op_code(ZEQUAL, cur.children[1].type, label1, NULL, 1);
+                    printf("    pushv 0x1\n    goto %s\n  %s:\n    pushv 0x0\n  %s:\n", label, label1, label);
+                }
+                break;
+            }
+            else
+            {
+                if(test && into)
+                {
+                    generate_statement_code(cur.children[0], global, local, into, NULL, 1);
+                    if(need_comparison(cur.children[0]))
+                        generate_binary_op_code(ZNEQUAL, cur.children[0].type, into, NULL, 1);
+                    generate_statement_code(cur.children[1], global, local, into, around, 1);
+                    if(need_comparison(cur.children[1]))
+                        generate_binary_op_code(ZNEQUAL, cur.children[1].type, into, around, 1);
+                }
+                else if(test && around)
+                {
+                    generate_label(label);
+                    generate_statement_code(cur.children[0], global, local, label, NULL, 1);
+                    if(need_comparison(cur.children[0]))
+                        generate_binary_op_code(ZNEQUAL, cur.children[0].type, label, NULL, 1);
+                    generate_statement_code(cur.children[1], global, local, NULL, around, 1);
+                    if(need_comparison(cur.children[1]))
+                        generate_binary_op_code(ZEQUAL, cur.children[1].type, around, NULL, 1);
+                    printf("  %s:\n", label);
+                }
+                else
+                {
+                    generate_label(label);
+                    generate_label(label1);
+                    generate_statement_code(cur.children[0], global, local, label, NULL, test);
+                    if(need_comparison(cur.children[0]))
+                        generate_binary_op_code(ZNEQUAL, cur.children[0].type, label, NULL, 1);
+                    generate_statement_code(cur.children[1], global, local, label, NULL, test);
+                    if(need_comparison(cur.children[1]))
+                        generate_binary_op_code(ZNEQUAL, cur.children[1].type, label, NULL, 1);
+                    printf("    pushv 0x0\n    goto %s\n  %s:\n    pushv 0x1\n  %s:\n", label1, label, label1);
+                }
+                break;
+            }
+        default:
+            fprintf(stderr, "token %s doesn't belong in branching block\n", token);
+    }
+    return 0;
+}
+
+static void generate_binary_op_code(int op, int op_type, char *into, char *around, int test)
 {
     char code, label1[20], label2[20], type[20];
 
@@ -419,6 +709,8 @@ static void generate_binary_op_code(int op, int op_type)
         case '|':
             printf("    %c\n", op);
             break;
+        case ZEQUAL:
+        case ZNEQUAL:
         case EQUAL:
         case NEQUAL:
         case GE:
@@ -426,10 +718,29 @@ static void generate_binary_op_code(int op, int op_type)
         case '>':
         case '<':
             tok_to_str(type, op);
-            generate_label(label1);
-            generate_label(label2);
-            printf("    %s%c %s\n    pushv 0x0\n    goto %s\n", type, code, label1, label2);
-            printf("  %s:\n    pushv 0x1\n  %s:\n", label1, label2);
+            if(test && into && around)
+            {
+                printf("    %s%c %s\n", type, code, into);
+                printf("    goto %s\n", around);
+            }
+            else if(test && into)
+            {
+
+                printf("    %s%c %s\n", type, code, into);
+            }
+            else if(test && around)
+            {
+                invert_operation(type, op);
+                printf("    %s%c %s\n", type, code, around);
+            }
+            else
+            {
+                generate_label(label1);
+                generate_label(label2);
+                printf("    %s%c %s\n    pushv 0x0\n    goto %s\n", type, code, label1, label2);
+                printf("  %s:\n    pushv 0x1\n  %s:\n", label1, label2);
+            }
+            break;
     }
 }
 
@@ -508,6 +819,62 @@ static int count_slots(ast_node_t base, char prepend, int vars, map_t map)
     }
 
     return vars;
+}
+
+static int need_comparison(ast_node_t token)
+{
+
+    if(token.token == BINARY_OP)
+    {
+        switch(token.value.i)
+        {
+            case EQUAL:
+            case NEQUAL:
+            case GE:
+            case LE:
+            case '>':
+            case '<':
+            case DAMP:
+            case DPIPE:
+            case ZEQUAL:
+            case ZNEQUAL:
+                return 0;
+            default:
+                return 1;
+        }
+    }
+    return 1;
+}
+
+static void invert_operation(char *type, int op)
+{
+    switch(op)
+    {
+        case EQUAL:
+            tok_to_str(type, NEQUAL);
+            break;
+        case NEQUAL:
+            tok_to_str(type, EQUAL);
+            break;
+        case GE:
+            tok_to_str(type, '<');
+            break;
+        case LE:
+            tok_to_str(type, '>');
+            break;
+        case '>':
+            tok_to_str(type, LE);
+            break;
+        case '<':
+            tok_to_str(type, GE);
+            break;
+        case ZEQUAL:
+            tok_to_str(type, ZNEQUAL);
+            break;
+        case ZNEQUAL:
+            tok_to_str(type, ZEQUAL);
+            break;
+    }
 }
 
 static int clear_map(void *nothing, void *str)
